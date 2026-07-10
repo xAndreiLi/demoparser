@@ -15,7 +15,7 @@ use parser::first_pass::parser_settings::FirstPassParser;
 use parser::first_pass::parser_settings::ParserInputs;
 use parser::parse_demo::DemoOutput;
 use parser::parse_demo::Parser;
-use parser::second_pass::parser_settings::create_huffman_lookup_table;
+use parser::second_pass::parser_settings::huffman_lookup_table;
 use parser::second_pass::variants::soa_to_aos;
 use parser::second_pass::variants::BytesVariant;
 use parser::second_pass::variants::OutputSerdeHelperStruct;
@@ -163,7 +163,7 @@ pub fn parse_voice(path_or_buf: Either<String, Buffer>) -> napi::Result<Vec<Voic
     only_header: false,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &vec![],
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: None,
     parse_grenades: false,
@@ -188,7 +188,6 @@ pub fn parse_voice(path_or_buf: Either<String, Buffer>) -> napi::Result<Vec<Voic
 pub fn list_game_events(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
   let bytes = resolve_byte_type(path_or_buf)?;
 
-  let huf = create_huffman_lookup_table();
   let settings = ParserInputs {
     wanted_players: vec![],
     real_name_to_og_name: AHashMap::default(),
@@ -202,7 +201,7 @@ pub fn list_game_events(path_or_buf: Either<String, Buffer>) -> napi::Result<Val
     only_header: false,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: None,
     parse_grenades: false,
@@ -226,7 +225,6 @@ pub fn parse_grenades(
   grenades: Option<bool>,
 ) -> napi::Result<Value> {
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
   let mut extra_props = match extra {
     Some(p) => p,
     None => vec![],
@@ -250,7 +248,7 @@ pub fn parse_grenades(
     only_header: true,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: None,
     parse_grenades: grenades,
@@ -284,7 +282,6 @@ pub fn parse_grenades(
 #[napi]
 pub fn parse_header(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
 
   let settings = ParserInputs {
     real_name_to_og_name: AHashMap::default(),
@@ -299,7 +296,7 @@ pub fn parse_header(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> 
     only_header: true,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: None,
     parse_grenades: false,
@@ -360,7 +357,6 @@ pub fn parse_event(
   }
 
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
 
   let game_event_list_bytes = if let Some(b) = game_event_list_bytes {
     Some(b.to_vec())
@@ -381,7 +377,7 @@ pub fn parse_event(
     only_header: true,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: game_event_list_bytes,
     parse_grenades: false,
@@ -432,7 +428,6 @@ pub fn parse_events(
   }
 
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
 
   let game_event_list_bytes = if let Some(b) = game_event_list_bytes {
     Some(b.to_vec())
@@ -453,7 +448,7 @@ pub fn parse_events(
     only_header: true,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: game_event_list_bytes,
     parse_grenades: false,
@@ -498,7 +493,6 @@ pub fn parse_ticks(
   };
 
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
   let mut real_name_to_og_name = AHashMap::default();
 
   for (real_name, user_friendly_name) in real_names.iter().zip(&wanted_props) {
@@ -533,7 +527,7 @@ pub fn parse_ticks(
     only_header: false,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: order_by_steamid,
     fallback_bytes: None,
     parse_grenades: false,
@@ -593,7 +587,6 @@ pub fn parse_ticks(
 #[napi]
 pub fn parse_player_info(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
 
   let settings = ParserInputs {
     wanted_players: vec![],
@@ -608,7 +601,7 @@ pub fn parse_player_info(path_or_buf: Either<String, Buffer>) -> napi::Result<Va
     only_header: true,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: None,
     parse_grenades: false,
@@ -625,7 +618,6 @@ pub fn parse_player_info(path_or_buf: Either<String, Buffer>) -> napi::Result<Va
 #[napi]
 pub fn parse_player_skins(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
 
   let settings = ParserInputs {
     wanted_players: vec![],
@@ -640,7 +632,7 @@ pub fn parse_player_skins(path_or_buf: Either<String, Buffer>) -> napi::Result<V
     only_header: true,
     list_props: false,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: None,
     parse_grenades: false,
@@ -656,7 +648,6 @@ pub fn parse_player_skins(path_or_buf: Either<String, Buffer>) -> napi::Result<V
 #[napi]
 pub fn list_updated_fields(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
   let bytes = resolve_byte_type(path_or_buf)?;
-  let huf = create_huffman_lookup_table();
 
   let settings = ParserInputs {
     wanted_players: vec![],
@@ -671,7 +662,7 @@ pub fn list_updated_fields(path_or_buf: Either<String, Buffer>) -> napi::Result<
     only_header: false,
     list_props: true,
     only_convars: false,
-    huffman_lookup_table: &huf,
+    huffman_lookup_table: huffman_lookup_table(),
     order_by_steamid: false,
     fallback_bytes: None,
     parse_grenades: false,

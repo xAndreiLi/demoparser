@@ -344,14 +344,17 @@ impl SpecialIDs {
     }
 }
 
-pub fn create_huffman_lookup_table() -> Vec<(u8, u8)> {
-    let buf = include_bytes!("huf.b");
-    let mut huf2 = Vec::with_capacity(HUF_LOOKUPTABLE_MAXVALUE as usize);
-    for chunk in buf.chunks_exact(2) {
-        huf2.push((chunk[0], chunk[1]));
-    }
-    huf2.push((0, 0));
-    return huf2;
+pub fn huffman_lookup_table() -> &'static Vec<(u8, u8)> {
+    static TABLE: std::sync::OnceLock<Vec<(u8, u8)>> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        let buf = include_bytes!("huf.b");
+        let mut huf2 = Vec::with_capacity(HUF_LOOKUPTABLE_MAXVALUE as usize);
+        for chunk in buf.chunks_exact(2) {
+            huf2.push((chunk[0], chunk[1]));
+        }
+        huf2.push((0, 0));
+        huf2
+    })
 }
 
 fn contains_usercmd_prop(names: &[String]) -> bool {

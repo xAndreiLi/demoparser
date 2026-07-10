@@ -6,7 +6,7 @@
 
 use parser::first_pass::parser_settings::ParserInputs;
 use parser::parse_demo::{Parser, ParsingMode};
-use parser::second_pass::parser_settings::create_huffman_lookup_table;
+use parser::second_pass::parser_settings::huffman_lookup_table;
 use ahash::AHashMap;
 use memmap2::MmapOptions;
 use std::env;
@@ -91,7 +91,7 @@ fn main() {
     let iters: usize = env::args().nth(2).and_then(|s| s.parse().ok()).unwrap_or(5);
     let mode = env::args().nth(3).unwrap_or_else(|| "both".to_string());
 
-    let huf = create_huffman_lookup_table();
+    let huf = huffman_lookup_table();
     let file = File::open(&demo_path).expect("open demo");
     let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
     println!("demo: {demo_path}  ({:.1} MB)", mmap.len() as f64 / 1e6);

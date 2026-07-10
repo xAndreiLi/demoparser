@@ -16,12 +16,12 @@ use ahash::AHashMap;
 use memmap2::MmapOptions;
 use parser::first_pass::parser_settings::ParserInputs;
 use parser::parse_demo::Parser;
-use parser::second_pass::parser_settings::create_huffman_lookup_table;
+use parser::second_pass::parser_settings::huffman_lookup_table;
 use std::fs::File;
 
 fn main() {
     let path_to_demo = "test_demo.dem";
-    let huf = create_huffman_lookup_table();
+    let huf = huffman_lookup_table();
 
     let settings = ParserInputs {
         wanted_players: vec![],

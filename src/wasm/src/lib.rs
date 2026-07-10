@@ -3,7 +3,7 @@ use parser::first_pass::parser_settings::FirstPassParser;
 use parser::first_pass::parser_settings::ParserInputs;
 use parser::parse_demo::Parser;
 use parser::parse_demo::ParsingMode::ForceSingleThreaded;
-use parser::second_pass::parser_settings::create_huffman_lookup_table;
+use parser::second_pass::parser_settings::huffman_lookup_table;
 use parser::second_pass::variants::soa_to_aos;
 use parser::second_pass::variants::OutputSerdeHelperStruct;
 use std::collections::HashMap;
@@ -43,7 +43,7 @@ pub fn parseEvent(
     for (real_name, user_friendly_name) in real_other_props.iter().zip(&other_props) {
         real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
     }
-    let arc_huf = Arc::new(create_huffman_lookup_table());
+    let arc_huf = Arc::new(huffman_lookup_table());
     let settings = ParserInputs {
         wanted_players: vec![],
         wanted_player_props: real_names_player,
@@ -108,7 +108,7 @@ pub fn parseEvents(
     for (real_name, user_friendly_name) in real_other_props.iter().zip(&other_props) {
         real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
     }
-    let arc_huf = Arc::new(create_huffman_lookup_table());
+    let arc_huf = Arc::new(huffman_lookup_table());
     let settings = ParserInputs {
         wanted_players: vec![],
         wanted_player_props: real_names_player,
@@ -141,7 +141,7 @@ pub fn parseEvents(
 
 #[wasm_bindgen]
 pub fn listGameEvents(fileBytes: Vec<u8>) -> Result<JsValue, JsError> {
-    let arc_huf = Arc::new(create_huffman_lookup_table());
+    let arc_huf = Arc::new(huffman_lookup_table());
     let settings = ParserInputs {
         wanted_players: vec![],
         real_name_to_og_name: HashMap::default().into(),
@@ -174,7 +174,7 @@ pub fn listGameEvents(fileBytes: Vec<u8>) -> Result<JsValue, JsError> {
 }
 #[wasm_bindgen]
 pub fn listUpdatedFields(fileBytes: Vec<u8>) -> Result<JsValue, JsError> {
-    let arc_huf = Arc::new(create_huffman_lookup_table());
+    let arc_huf = Arc::new(huffman_lookup_table());
     let settings = ParserInputs {
         wanted_players: vec![],
         real_name_to_og_name: HashMap::default().into(),
@@ -229,7 +229,7 @@ pub fn parseTicks(
         Ok(names) => names,
         Err(e) => return Err(JsError::new(&format!("{}", e))),
     };
-    let arc_huf = Arc::new(create_huffman_lookup_table());
+    let arc_huf = Arc::new(huffman_lookup_table());
     let mut real_name_to_og_name = HashMap::default();
     for (real_name, user_friendly_name) in real_names.iter().zip(&wanted_props) {
         real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
@@ -308,7 +308,7 @@ pub fn parseGrenades(
     };
     let grenades = grenades.unwrap_or(true);
 
-    let arc_huf = Arc::new(create_huffman_lookup_table());
+    let arc_huf = Arc::new(huffman_lookup_table());
     let mut real_name_to_og_name = HashMap::default();
     for (real_name, user_friendly_name) in real_names.iter().zip(&extra) {
         real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
@@ -353,7 +353,7 @@ pub fn parseGrenades(
 
 #[wasm_bindgen]
 pub fn parseHeader(file: Vec<u8>) -> Result<JsValue, JsError> {
-    let arc_huf = Arc::new(create_huffman_lookup_table());
+    let arc_huf = Arc::new(huffman_lookup_table());
 
     let settings = ParserInputs {
         wanted_players: vec![],

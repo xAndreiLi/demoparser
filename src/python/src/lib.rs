@@ -10,7 +10,7 @@ use parser::first_pass::read_bits::DemoParserError;
 use parser::parse_demo::Parser;
 use parser::second_pass::game_events::EventField;
 use parser::second_pass::game_events::GameEvent;
-use parser::second_pass::parser_settings::create_huffman_lookup_table;
+use parser::second_pass::parser_settings::huffman_lookup_table;
 use parser::second_pass::variants::VarVec;
 use parser::second_pass::variants::Variant;
 use polars::prelude::ArrayRef;
@@ -115,7 +115,7 @@ impl DemoParser {
             Ok(mmap) => mmap,
             Err(e) => return Err(Exception::new_err(format!("{e}. File name: {demo_path}"))),
         };
-        let huf = create_huffman_lookup_table();
+        let huf = huffman_lookup_table();
         Ok(Self { mmap, huf })
     }
 

@@ -7,3 +7,5 @@ perf.data
 perf.data.old
 junk.txt
 voxels.txt
+
+node_modules

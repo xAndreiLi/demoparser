@@ -25,7 +25,7 @@ lto = true
 
 [dependencies.parser]
 path = "../parser"
-features = ["voice"]
+features = []
 
 [dependencies.csgoproto]
 path = "../csgoproto"

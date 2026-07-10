@@ -6,7 +6,7 @@ use crate::first_pass::prop_controller::*;
 use crate::parse_demo::DemoOutput;
 use crate::parse_demo::Parser;
 use crate::second_pass::game_events::GameEvent;
-use crate::second_pass::parser_settings::create_huffman_lookup_table;
+use crate::second_pass::parser_settings::huffman_lookup_table;
 use ahash::AHashMap;
 use itertools::Itertools;
 use memmap2::MmapOptions;
@@ -297,7 +297,7 @@ pub fn _create_ge_tests() {
     ];
 
     let wanted_events = vec!["all".to_string()];
-    let huf = create_huffman_lookup_table();
+    let huf = huffman_lookup_table();
 
     let settings = ParserInputs {
         wanted_player_props: wanted_props.clone(),
@@ -673,7 +673,7 @@ pub fn _create_tests() {
         "agent_skin".to_string(),
         "is_airborne".to_string(),
     ];
-    let huf = create_huffman_lookup_table();
+    let huf = huffman_lookup_table();
 
     let settings = ParserInputs {
         wanted_player_props: wanted_props.clone(),
@@ -1045,7 +1045,7 @@ fn create_data() -> (DemoOutput, PropController, BTreeMap<String, Vec<GameEvent>
     ];
 
     let wanted_events = vec![];
-    let huf = create_huffman_lookup_table();
+    let huf = huffman_lookup_table();
 
     let settings = ParserInputs {
         fallback_bytes: None,
@@ -1072,7 +1072,7 @@ fn create_data() -> (DemoOutput, PropController, BTreeMap<String, Vec<GameEvent>
     let out1 = ds.parse_demo(&mmap).unwrap();
 
     let wanted_events = vec!["all".to_string()];
-    let huf = create_huffman_lookup_table();
+    let huf = huffman_lookup_table();
 
     let settings = ParserInputs {
         wanted_player_props: vec![],
@@ -1168,7 +1168,7 @@ mod tests {
     use crate::parse_demo::Parser;
     use crate::second_pass::game_events::EventField;
     use crate::second_pass::game_events::GameEvent;
-    use crate::second_pass::parser_settings::create_huffman_lookup_table;
+    use crate::second_pass::parser_settings::huffman_lookup_table;
     use crate::second_pass::variants::PropColumn;
     use crate::second_pass::variants::Sticker;
     use crate::second_pass::variants::VarVec;
@@ -1184,7 +1184,7 @@ mod tests {
     }
     #[test]
     fn test_player_filter() {
-        let huf = create_huffman_lookup_table();
+        let huf = huffman_lookup_table();
 
         let settings = ParserInputs {
             wanted_players: vec![76561198244754626],

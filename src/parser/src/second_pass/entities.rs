@@ -211,7 +211,7 @@ impl<'a> SecondPassParser<'a> {
             let peeked_bits = bitreader.peek(HUFFMAN_CODE_MAXLEN);
             // SAFETY: peek(17) yields a value in [0, 2^17-1] (it masks with (1<<17)-1), and the
             // huffman table is built with exactly 2^17 entries (huf.b = 131071 pairs + 1 sentinel,
-            // see create_huffman_lookup_table). So `peeked_bits` is always a valid index. Eliding
+            // see huffman_lookup_table). So `peeked_bits` is always a valid index. Eliding
             // the bounds check removes a per-symbol branch in the hottest decode loop.
             let (symbol, code_len) = unsafe { *self.huffman_lookup_table.get_unchecked(peeked_bits as usize) };
             bitreader.consume(code_len as u32);
