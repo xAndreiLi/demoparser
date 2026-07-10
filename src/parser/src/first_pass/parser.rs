@@ -28,6 +28,7 @@ use snap::raw::decompress_len;
 use snap::raw::Decoder as SnapDecoder;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 pub const HEADER_ENDS_AT_BYTE: usize = 16;
 
@@ -68,6 +69,26 @@ pub struct FirstPassOutput<'a> {
     pub order_by_steamid: bool,
     pub list_props: bool,
 }
+
+/// Settings-independent structural data extracted from a first pass.
+/// Stored in the global demo cache keyed by (canonical path, mtime) so that
+/// subsequent calls for the same file can skip the expensive full-file scan and
+/// only re-run the settings-dependent sendtable/class-info processing.
+#[derive(Clone)]
+pub struct CachedFirstPassStructure {
+    pub fullpacket_offsets: Vec<usize>,
+    pub baselines: AHashMap<u32, Vec<u8>>,
+    pub string_tables: Vec<StringTable>,
+    pub stringtable_players: BTreeMap<i32, UserInfo>,
+    pub header: AHashMap<String, String>,
+    pub ge_list: AHashMap<i32, DescriptorT>,
+    /// Decompressed DemSendTables payload — replayed on cache hit to rebuild
+    /// cls_by_id / qf_mapper / prop_controller without reading the file.
+    pub sendtable_raw_bytes: Vec<u8>,
+    /// Decompressed DemClassInfo payload — replayed together with sendtable bytes.
+    pub class_info_raw_bytes: Vec<u8>,
+    pub file_mtime: SystemTime,
+}
 #[derive(Debug)]
 pub struct Frame {
     pub tick: i32,
@@ -89,6 +110,14 @@ impl<'a> FirstPassParser<'a> {
         Ok(self.header.clone())
     }
     pub fn parse_demo(&mut self, demo_bytes: &'a [u8], exit_early: bool) -> Result<FirstPassOutput, DemoParserError> {
+        self.parse_demo_setup_only(demo_bytes, exit_early)?;
+        self.create_first_pass_output()
+    }
+
+    /// Run the first-pass frame loop and populate all parser state. Returns `()`
+    /// so that the mutable borrow ends before callers take immutable references
+    /// (e.g. to create a `CachedFirstPassStructure` or call `create_first_pass_output`).
+    pub fn parse_demo_setup_only(&mut self, demo_bytes: &'a [u8], exit_early: bool) -> Result<(), DemoParserError> {
         self.handle_short_header(demo_bytes.len(), &demo_bytes[..HEADER_ENDS_AT_BYTE])?;
         let mut reuseable_buffer = vec![0_u8; 100_000];
         // Loop that goes trough the entire file
@@ -119,9 +148,15 @@ impl<'a> FirstPassParser<'a> {
             let bytes = self.decompress_if_needed(&mut reuseable_buffer, bytes, &frame)?;
             self.ptr += frame.size;
             match frame.demo_cmd {
-                EDemoCommands::DemSendTables => self.parse_sendtable_bytes(bytes)?,
+                EDemoCommands::DemSendTables => {
+                    self.sendtable_raw_bytes = bytes.to_vec();
+                    self.parse_sendtable_bytes(bytes)?;
+                }
                 EDemoCommands::DemFileHeader => self.parse_header(bytes)?,
-                EDemoCommands::DemClassInfo => self.parse_class_info(bytes)?,
+                EDemoCommands::DemClassInfo => {
+                    self.class_info_raw_bytes = bytes.to_vec();
+                    self.parse_class_info(bytes)?;
+                }
                 EDemoCommands::DemSignonPacket => self.parse_packet(bytes)?,
                 EDemoCommands::DemFullPacket => self.parse_full_packet(bytes, &frame)?,
                 EDemoCommands::DemStop => break,
@@ -129,7 +164,7 @@ impl<'a> FirstPassParser<'a> {
             };
         }
         self.fallback_if_first_pass_missing_data()?;
-        self.create_first_pass_output()
+        Ok(())
     }
 
     fn parse_sendtable_bytes(&mut self, bytes: &[u8]) -> Result<(), DemoParserError> {
@@ -408,5 +443,42 @@ impl<'a> FirstPassParser<'a> {
         self.qf_mapper = qf_mapper;
         self.prop_controller = p;
         return Ok(());
+    }
+
+    /// Build a `CachedFirstPassStructure` from the current parser state.
+    /// Only valid after a complete first pass (`parse_demo` has returned successfully).
+    /// `file_mtime` must be the mtime of the file that was just parsed; it is stored
+    /// in the cache entry so callers can detect when the file changes on disk.
+    pub fn create_cached_structure(&self, file_mtime: SystemTime) -> CachedFirstPassStructure {
+        CachedFirstPassStructure {
+            fullpacket_offsets: self.fullpacket_offsets.clone(),
+            baselines: self.baselines.clone(),
+            string_tables: self.string_tables.clone(),
+            stringtable_players: self.stringtable_players.clone(),
+            header: self.header.clone(),
+            ge_list: self.ge_list.clone(),
+            sendtable_raw_bytes: self.sendtable_raw_bytes.clone(),
+            class_info_raw_bytes: self.class_info_raw_bytes.clone(),
+            file_mtime,
+        }
+    }
+
+    /// Populate this parser's state from a cached structure and re-run only the
+    /// settings-dependent parts (sendtable + class-info parsing) from the cached
+    /// raw bytes. After this returns the parser is ready to call `create_first_pass_output`.
+    pub fn apply_cached_structure(&mut self, cached: &CachedFirstPassStructure) -> Result<(), DemoParserError> {
+        self.fullpacket_offsets = cached.fullpacket_offsets.clone();
+        self.baselines = cached.baselines.clone();
+        self.string_tables = cached.string_tables.clone();
+        self.stringtable_players = cached.stringtable_players.clone();
+        self.header = cached.header.clone();
+        self.ge_list = cached.ge_list.clone();
+        // Re-run sendtable then class-info from the cached decompressed payloads.
+        // This rebuilds cls_by_id, qf_mapper, and prop_controller with the current
+        // call's settings (wanted_player_props etc.) — the settings-dependent parts.
+        self.parse_sendtable_bytes(&cached.sendtable_raw_bytes)?;
+        self.parse_class_info(&cached.class_info_raw_bytes)?;
+        self.fallback_if_first_pass_missing_data()?;
+        Ok(())
     }
 }

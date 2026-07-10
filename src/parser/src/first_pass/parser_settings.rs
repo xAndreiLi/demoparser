@@ -85,6 +85,12 @@ pub struct FirstPassParser<'a> {
     pub order_by_steamid: bool,
     pub list_props: bool,
     pub fallback_bytes: Option<&'a [u8]>,
+    /// Raw decompressed payload of the DemSendTables frame, saved during the first pass
+    /// so it can be stored in the demo cache and replayed on a cache hit.
+    pub sendtable_raw_bytes: Vec<u8>,
+    /// Raw decompressed payload of the DemClassInfo frame, saved during the first pass
+    /// so it can be stored in the demo cache and replayed on a cache hit.
+    pub class_info_raw_bytes: Vec<u8>,
 }
 pub fn needs_velocity(props: &[String]) -> bool {
     for prop in props {
@@ -151,6 +157,8 @@ impl<'a> FirstPassParser<'a> {
             prop_infos: vec![],
             header: AHashMap::default(),
             list_props: inputs.list_props,
+            sendtable_raw_bytes: vec![],
+            class_info_raw_bytes: vec![],
         }
     }
 }

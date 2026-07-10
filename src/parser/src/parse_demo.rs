@@ -1,5 +1,5 @@
 use crate::first_pass::frameparser::{FrameParser, StartEndOffset, StartEndType};
-use crate::first_pass::parser::FirstPassOutput;
+use crate::first_pass::parser::{CachedFirstPassStructure, FirstPassOutput};
 use crate::first_pass::parser_settings::check_multithreadability;
 use crate::first_pass::parser_settings::{FirstPassParser, ParserInputs};
 use crate::first_pass::prop_controller::{PropController, NAME_ID, STEAMID_ID, TICK_ID};
@@ -17,11 +17,43 @@ use itertools::Itertools;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::ParallelIterator;
+use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
 pub const HEADER_ENDS_AT_BYTE: usize = 16;
+
+// ---------------------------------------------------------------------------
+// Per-file first-pass cache
+// ---------------------------------------------------------------------------
+
+/// Global LRU-less cache: (canonical path, mtime) → cached structural data.
+/// Entries are invalidated automatically when the file's mtime changes.
+static DEMO_CACHE: OnceLock<Mutex<HashMap<String, Arc<CachedFirstPassStructure>>>> = OnceLock::new();
+
+fn demo_cache() -> &'static Mutex<HashMap<String, Arc<CachedFirstPassStructure>>> {
+    DEMO_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Look up a valid cache entry. Returns `None` if the file is not cached or its
+/// mtime does not match the cached value (i.e. the file changed on disk).
+fn try_get_cached(path: &str) -> Option<Arc<CachedFirstPassStructure>> {
+    let current_mtime = std::fs::metadata(path).ok()?.modified().ok()?;
+    let cache = demo_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(entry) = cache.get(path) {
+        if entry.file_mtime == current_mtime {
+            return Some(Arc::clone(entry));
+        }
+    }
+    None
+}
+
+fn save_to_cache(path: &str, structure: CachedFirstPassStructure) {
+    let mut cache = demo_cache().lock().unwrap_or_else(|e| e.into_inner());
+    cache.insert(path.to_string(), Arc::new(structure));
+}
 
 #[derive(Debug)]
 pub struct DemoOutput {
@@ -48,6 +80,9 @@ pub struct DemoOutput {
 pub struct Parser<'a> {
     input: ParserInputs<'a>,
     pub parsing_mode: ParsingMode,
+    /// Canonical file-system path of the demo, if it was opened from a file.
+    /// Used as the cache key for the first-pass structure cache.
+    pub file_path: Option<String>,
 }
 #[derive(PartialEq)]
 pub enum ParsingMode {
@@ -61,13 +96,47 @@ impl<'a> Parser<'a> {
         Parser {
             input: input,
             parsing_mode: parsing_mode,
+            file_path: None,
         }
     }
+
+    /// Builder method: attach the source file path so the parser can cache and
+    /// reuse the settings-independent first-pass results across calls.
+    pub fn with_file_path(mut self, path: Option<String>) -> Self {
+        self.file_path = path;
+        self
+    }
+
     pub fn parse_demo(&mut self, demo_bytes: &[u8]) -> Result<DemoOutput, DemoParserError> {
         let _prof = std::env::var("CS2_PROF").is_ok();
         let _t = std::time::Instant::now();
         let mut first_pass_parser = FirstPassParser::new(&self.input);
-        let first_pass_output = first_pass_parser.parse_demo(demo_bytes, false)?;
+
+        // --- Cache-aware first pass -------------------------------------------
+        // When a file path is available, attempt to skip the expensive full-file
+        // scan by loading structural data (fullpacket offsets, baselines, string
+        // tables, game-event schema) from the cache. The settings-dependent parts
+        // (cls_by_id / prop_controller) are always rebuilt from cached raw bytes.
+        let first_pass_output = if let Some(ref path) = self.file_path {
+            if let Some(cached) = try_get_cached(path) {
+                // Cache hit: rebuild settings-dependent state from cached bytes.
+                first_pass_parser.apply_cached_structure(&cached)?;
+                first_pass_parser.create_first_pass_output()?
+            } else {
+                // Cache miss: full first pass via setup_only (returns ()) so the
+                // mutable borrow ends before we take immutable borrows below.
+                first_pass_parser.parse_demo_setup_only(demo_bytes, false)?;
+                if let Ok(mtime) = std::fs::metadata(path).and_then(|m| m.modified()) {
+                    let structure = first_pass_parser.create_cached_structure(mtime);
+                    save_to_cache(path, structure);
+                }
+                first_pass_parser.create_first_pass_output()?
+            }
+        } else {
+            first_pass_parser.parse_demo(demo_bytes, false)?
+        };
+        // ----------------------------------------------------------------------
+
         if _prof {
             eprintln!("[prof] first_pass: {:.3}s", _t.elapsed().as_secs_f64());
         }

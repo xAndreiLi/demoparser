@@ -140,6 +140,11 @@ fn parse_demo(bytes: BytesVariant, parser: &mut Parser) -> Result<DemoOutput, Er
     },
   }
 }
+
+/// Build a `Parser` with an optional file-path cache key attached.
+fn make_parser<'a>(settings: ParserInputs<'a>, mode: parser::parse_demo::ParsingMode, file_path: Option<String>) -> Parser<'a> {
+  Parser::new(settings, mode).with_file_path(file_path)
+}
 #[napi(object)]
 pub struct VoiceData {
   pub tick: i32,
@@ -149,7 +154,7 @@ pub struct VoiceData {
 
 #[napi]
 pub fn parse_voice(path_or_buf: Either<String, Buffer>) -> napi::Result<Vec<VoiceData>> {
-  let bytes = resolve_byte_type(path_or_buf).unwrap();
+  let (bytes, file_path) = resolve_byte_type(path_or_buf).unwrap();
   let settings = ParserInputs {
     wanted_players: vec![],
     wanted_player_props: vec![],
@@ -168,7 +173,7 @@ pub fn parse_voice(path_or_buf: Either<String, Buffer>) -> napi::Result<Vec<Voic
     fallback_bytes: None,
     parse_grenades: false,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
   let mut out = vec![];
 
@@ -186,7 +191,7 @@ pub fn parse_voice(path_or_buf: Either<String, Buffer>) -> napi::Result<Vec<Voic
 
 #[napi]
 pub fn list_game_events(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
 
   let settings = ParserInputs {
     wanted_players: vec![],
@@ -206,7 +211,7 @@ pub fn list_game_events(path_or_buf: Either<String, Buffer>) -> napi::Result<Val
     fallback_bytes: None,
     parse_grenades: false,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
 
   let v = Vec::from_iter(output.game_events_counter.iter());
@@ -224,7 +229,7 @@ pub fn parse_grenades(
   extra: Option<Vec<String>>,
   grenades: Option<bool>,
 ) -> napi::Result<Value> {
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
   let mut extra_props = match extra {
     Some(p) => p,
     None => vec![],
@@ -253,7 +258,7 @@ pub fn parse_grenades(
     fallback_bytes: None,
     parse_grenades: grenades,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
 
   let mut real_name_to_og_name = AHashMap::default();
@@ -281,7 +286,7 @@ pub fn parse_grenades(
 }
 #[napi]
 pub fn parse_header(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, _file_path) = resolve_byte_type(path_or_buf)?;
 
   let settings = ParserInputs {
     real_name_to_og_name: AHashMap::default(),
@@ -356,7 +361,7 @@ pub fn parse_event(
     real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
   }
 
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
 
   let game_event_list_bytes = if let Some(b) = game_event_list_bytes {
     Some(b.to_vec())
@@ -382,7 +387,7 @@ pub fn parse_event(
     fallback_bytes: game_event_list_bytes,
     parse_grenades: false,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
   let s = match serde_json::to_value(&output.game_events) {
     Ok(s) => s,
@@ -427,7 +432,7 @@ pub fn parse_events(
     real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
   }
 
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
 
   let game_event_list_bytes = if let Some(b) = game_event_list_bytes {
     Some(b.to_vec())
@@ -453,8 +458,8 @@ pub fn parse_events(
     fallback_bytes: game_event_list_bytes,
     parse_grenades: false,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
-  let output = parse_demo(bytes, &mut parser)?;
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
+  let output = parse_demo(bytes, &mut parser)?;;
   let s = match serde_json::to_value(&output.game_events) {
     Ok(s) => s,
     Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
@@ -492,8 +497,8 @@ pub fn parse_ticks(
     Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
   };
 
-  let bytes = resolve_byte_type(path_or_buf)?;
-  let mut real_name_to_og_name = AHashMap::default();
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
+  let mut real_name_to_og_name: AHashMap<String, String> = AHashMap::default();
 
   for (real_name, user_friendly_name) in real_names.iter().zip(&wanted_props) {
     real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
@@ -533,7 +538,7 @@ pub fn parse_ticks(
     parse_grenades: false,
   };
 
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
   real_names.push("tick".to_owned());
   real_names.push("steamid".to_owned());
@@ -586,7 +591,7 @@ pub fn parse_ticks(
 
 #[napi]
 pub fn parse_player_info(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
 
   let settings = ParserInputs {
     wanted_players: vec![],
@@ -606,7 +611,7 @@ pub fn parse_player_info(path_or_buf: Either<String, Buffer>) -> napi::Result<Va
     fallback_bytes: None,
     parse_grenades: false,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
   let s = match serde_json::to_value(&output.player_md) {
     Ok(s) => s,
@@ -617,7 +622,7 @@ pub fn parse_player_info(path_or_buf: Either<String, Buffer>) -> napi::Result<Va
 
 #[napi]
 pub fn parse_player_skins(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
 
   let settings = ParserInputs {
     wanted_players: vec![],
@@ -637,7 +642,7 @@ pub fn parse_player_skins(path_or_buf: Either<String, Buffer>) -> napi::Result<V
     fallback_bytes: None,
     parse_grenades: false,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
   let s = match serde_json::to_value(&output.skins) {
     Ok(s) => s,
@@ -647,7 +652,7 @@ pub fn parse_player_skins(path_or_buf: Either<String, Buffer>) -> napi::Result<V
 }
 #[napi]
 pub fn list_updated_fields(path_or_buf: Either<String, Buffer>) -> napi::Result<Value> {
-  let bytes = resolve_byte_type(path_or_buf)?;
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
 
   let settings = ParserInputs {
     wanted_players: vec![],
@@ -667,7 +672,7 @@ pub fn list_updated_fields(path_or_buf: Either<String, Buffer>) -> napi::Result<
     fallback_bytes: None,
     parse_grenades: false,
   };
-  let mut parser = Parser::new(settings, parser::parse_demo::ParsingMode::Normal);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
   let output = parse_demo(bytes, &mut parser)?;
   let s = match serde_json::to_value(&output.uniq_prop_names) {
     Ok(s) => s,
@@ -676,7 +681,7 @@ pub fn list_updated_fields(path_or_buf: Either<String, Buffer>) -> napi::Result<
   Ok(s)
 }
 
-fn resolve_byte_type(path_or_buf: Either<String, Buffer>) -> Result<BytesVariant, napi::Error> {
+fn resolve_byte_type(path_or_buf: Either<String, Buffer>) -> Result<(BytesVariant, Option<String>), napi::Error> {
   match path_or_buf {
     Either::A(path) => {
       let file = match File::open(path.clone()) {
@@ -687,8 +692,8 @@ fn resolve_byte_type(path_or_buf: Either<String, Buffer>) -> Result<BytesVariant
         Ok(mmap) => mmap,
         Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
       };
-      Ok(BytesVariant::Mmap(mmap))
+      Ok((BytesVariant::Mmap(mmap), Some(path)))
     }
-    Either::B(buf) => Ok(BytesVariant::Vec(buf.into())),
+    Either::B(buf) => Ok((BytesVariant::Vec(buf.into()), None)),
   }
 }
