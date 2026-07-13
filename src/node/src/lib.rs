@@ -24,10 +24,19 @@ use std::fs::File;
 use std::hash::RandomState;
 use std::result::Result;
 
-#[derive(Clone)]
-pub struct JsVariant(Variant);
+#[napi]
+pub type JsVariant = Either4<bool, String, f64, BigInt>;
 
-impl FromNapiValue for JsVariant {
+#[napi(object)]
+pub struct WantedPropState {
+  pub prop: String,
+  pub state: JsVariant,
+}
+
+#[derive(Clone)]
+pub struct ParsedJsVariant(Variant);
+
+impl FromNapiValue for ParsedJsVariant {
   unsafe fn from_napi_value(env: sys::napi_env, napi_val: sys::napi_value) -> napi::Result<Self> {
     let js_unknown = Unknown::from_napi_value(env, napi_val)?;
 
@@ -35,7 +44,7 @@ impl FromNapiValue for JsVariant {
       Ok(js_unknown_type) => {
         if js_unknown_type == ValueType::Boolean {
           if let Ok(val) = js_unknown.coerce_to_bool() {
-            Ok(JsVariant(Variant::Bool(val)))
+            Ok(ParsedJsVariant(Variant::Bool(val)))
           } else {
             Err(Error::new(
               Status::InvalidArg,
@@ -44,7 +53,7 @@ impl FromNapiValue for JsVariant {
           }
         } else if js_unknown_type == ValueType::String {
           if let Ok(val) = js_unknown.coerce_to_string() {
-            Ok(JsVariant(Variant::String(val.into_utf8()?.into_owned()?)))
+            Ok(ParsedJsVariant(Variant::String(val.into_utf8()?.into_owned()?)))
           } else {
             Err(Error::new(
               Status::InvalidArg,
@@ -56,16 +65,16 @@ impl FromNapiValue for JsVariant {
             let num = val.get_double()?;
             if num.fract() == 0.0 {
               if num >= u8::MIN as f64 && num <= u8::MAX as f64 {
-                Ok(JsVariant(Variant::I32(num as i32)))
+                Ok(ParsedJsVariant(Variant::I32(num as i32)))
               } else if let Ok(val) = val.get_int32() {
                 let int32_val = val;
                 if int32_val >= i16::MIN as i32 && int32_val <= i16::MAX as i32 {
-                  Ok(JsVariant(Variant::I32(int32_val)))
+                  Ok(ParsedJsVariant(Variant::I32(int32_val)))
                 } else {
-                  Ok(JsVariant(Variant::I32(int32_val)))
+                  Ok(ParsedJsVariant(Variant::I32(int32_val)))
                 }
               } else if let Ok(val) = val.get_uint32() {
-                Ok(JsVariant(Variant::U32(val)))
+                Ok(ParsedJsVariant(Variant::U32(val)))
               } else {
                 Err(Error::new(
                   Status::InvalidArg,
@@ -73,7 +82,7 @@ impl FromNapiValue for JsVariant {
                 ))
               }
             } else {
-              Ok(JsVariant(Variant::F32(num as f32)))
+              Ok(ParsedJsVariant(Variant::F32(num as f32)))
             }
           } else {
             Err(Error::new(
@@ -86,7 +95,7 @@ impl FromNapiValue for JsVariant {
           let (is_negative, val, is_lossless) = bigint_val.get_u64();
 
           if !is_negative && is_lossless {
-            Ok(JsVariant(Variant::U64(val)))
+            Ok(ParsedJsVariant(Variant::U64(val)))
           } else {
             Err(Error::new(
               Status::InvalidArg,
@@ -108,12 +117,12 @@ impl FromNapiValue for JsVariant {
   }
 }
 
-pub struct WantedPropState {
+pub struct ParsedWantedPropState {
   pub prop: String,
-  pub state: JsVariant,
+  pub state: ParsedJsVariant,
 }
 
-impl FromNapiValue for WantedPropState {
+impl FromNapiValue for ParsedWantedPropState {
   unsafe fn from_napi_value(
     env: sys::napi_env,
     napi_val: napi::sys::napi_value,
@@ -121,9 +130,9 @@ impl FromNapiValue for WantedPropState {
     let obj: Object = Object::from_napi_value(env, napi_val)?;
 
     let prop: String = obj.get_named_property("prop")?;
-    let state: JsVariant = obj.get_named_property_unchecked("state")?;
+    let state: ParsedJsVariant = obj.get_named_property_unchecked("state")?;
 
-    Ok(WantedPropState { prop, state })
+    Ok(ParsedWantedPropState { prop, state })
   }
 }
 
@@ -474,7 +483,7 @@ pub fn parse_ticks(
   wanted_players: Option<Vec<String>>,
   struct_of_arrays: Option<bool>,
   order_by_steamid: Option<bool>,
-  prop_states: Option<Vec<WantedPropState>>,
+  #[napi(ts_arg_type = "Array<WantedPropState>")] prop_states: Option<Vec<ParsedWantedPropState>>,
 ) -> napi::Result<Value> {
   let mut real_names = match rm_user_friendly_names(&wanted_props) {
     Ok(names) => names,
