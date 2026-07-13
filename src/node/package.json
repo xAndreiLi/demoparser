@@ -4,26 +4,19 @@
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
-    "name": "demoparser2",
-    "triples": {
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-linux-android",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-unknown-linux-musl",
-        "aarch64-pc-windows-msvc",
-        "armv7-unknown-linux-gnueabihf",
-        "x86_64-unknown-linux-musl",
-        "x86_64-unknown-freebsd",
-        "i686-pc-windows-msvc",
-        "armv7-linux-androideabi",
-        "universal-apple-darwin"
-      ]
-    }
+    "binaryName": "demoparser2",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl"
+    ]
   },
   "license": "MIT",
   "devDependencies": {
-    "@napi-rs/cli": "^2.16.1",
+    "@napi-rs/cli": "^3.0.0",
     "ava": "^5.1.1",
     "jest": "^29.7.0"
   },
@@ -31,7 +24,7 @@
     "timeout": "3m"
   },
   "engines": {
-    "node": ">= 10"
+    "node": ">= 22"
   },
   "scripts": {
     "artifacts": "napi artifacts",
@@ -41,5 +34,10 @@
     "test": "jest",
     "universal": "napi universal",
     "version": "napi version"
+  },
+  "optionalDependencies": {
+    "@laihoe/demoparser2-win32-x64-msvc": "0.8.1",
+    "@laihoe/demoparser2-darwin-x64": "0.8.1",
+    "@laihoe/demoparser2-linux-x64-gnu": "0.8.1"
   }
 }
