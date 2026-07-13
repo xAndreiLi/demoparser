@@ -5,10 +5,8 @@ extern crate napi_derive;
 use ahash::AHashMap;
 use memmap2::MmapOptions;
 use napi::bindgen_prelude::*;
-use napi::threadsafe_function::JsValuesTupleIntoVec;
 use napi::Either;
-use napi::JsBigInt;
-use napi::JsUnknown;
+use napi::Unknown;
 use parser::first_pass::parser_settings::rm_map_user_friendly_names;
 use parser::first_pass::parser_settings::rm_user_friendly_names;
 use parser::first_pass::parser_settings::FirstPassParser;
@@ -26,19 +24,18 @@ use std::fs::File;
 use std::hash::RandomState;
 use std::result::Result;
 
-#[napi]
 #[derive(Clone)]
 pub struct JsVariant(Variant);
 
 impl FromNapiValue for JsVariant {
   unsafe fn from_napi_value(env: sys::napi_env, napi_val: sys::napi_value) -> napi::Result<Self> {
-    let js_unknown = JsUnknown::from_napi_value(env, napi_val)?;
+    let js_unknown = Unknown::from_napi_value(env, napi_val)?;
 
     match js_unknown.get_type() {
       Ok(js_unknown_type) => {
         if js_unknown_type == ValueType::Boolean {
           if let Ok(val) = js_unknown.coerce_to_bool() {
-            Ok(JsVariant(Variant::Bool(val.get_value()?)))
+            Ok(JsVariant(Variant::Bool(val)))
           } else {
             Err(Error::new(
               Status::InvalidArg,
@@ -85,13 +82,16 @@ impl FromNapiValue for JsVariant {
             ))
           }
         } else if js_unknown_type == ValueType::BigInt {
-          let bigint_val = js_unknown.cast::<JsBigInt>();
-          match bigint_val.get_u64() {
-            Ok((val, true)) => Ok(JsVariant(Variant::U64(val))),
-            _ => Err(Error::new(
+          let bigint_val = unsafe { js_unknown.cast::<BigInt>() }?;
+          let (is_negative, val, is_lossless) = bigint_val.get_u64();
+
+          if !is_negative && is_lossless {
+            Ok(JsVariant(Variant::U64(val)))
+          } else {
+            Err(Error::new(
               Status::InvalidArg,
               "Unsupported number type".to_owned(),
-            )),
+            ))
           }
         } else {
           Err(Error::new(
@@ -108,7 +108,6 @@ impl FromNapiValue for JsVariant {
   }
 }
 
-#[napi]
 pub struct WantedPropState {
   pub prop: String,
   pub state: JsVariant,
@@ -122,7 +121,7 @@ impl FromNapiValue for WantedPropState {
     let obj: Object = Object::from_napi_value(env, napi_val)?;
 
     let prop: String = obj.get_named_property("prop")?;
-    let state: JsVariant = obj.get_named_property("state")?;
+    let state: JsVariant = obj.get_named_property_unchecked("state")?;
 
     Ok(WantedPropState { prop, state })
   }
@@ -459,7 +458,7 @@ pub fn parse_events(
     parse_grenades: false,
   };
   let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
-  let output = parse_demo(bytes, &mut parser)?;;
+  let output = parse_demo(bytes, &mut parser)?;
   let s = match serde_json::to_value(&output.game_events) {
     Ok(s) => s,
     Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
