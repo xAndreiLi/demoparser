@@ -1,9 +1,10 @@
 
-var {parseEvent, parseEvents,parseTicks, parsePlayerInfo, parseGrenades, listGameEvents, parseHeader} = require('../index');
+var { parseEvent, parseEvents, parseEventsScoped, parseTicks, parsePlayerInfo, parseGrenades, listGameEvents, parseHeader } = require('../index');
 const fs = require('fs');
 
 
 const filePath = "../python/tests/test.dem"
+const scopedFilePath = "../parser/test_demo.dem"
 const wantedTicks = Array.from({ length: 100000 }, (_, x) => x).filter(x => x % 100 === 0);
 
 
@@ -18,6 +19,36 @@ test('parse_events_with_props', () => {
     let x = parseEvents(filePath, ["all"], ["X", "Y"], ["game_time", "total_rounds_played"])
     let event = JSON.stringify(x);
     expect(event).toBe(event_correct);
+});
+test('parse_events_scoped_filters_props_per_event', () => {
+    const events = parseEventsScoped(scopedFilePath, [
+        { event: "player_death", playerProps: ["X"], otherProps: ["game_time"] },
+        { event: "player_hurt", playerProps: ["Y"] },
+    ]);
+
+    const death = events.find((event) => event.event_name === "player_death");
+    const hurt = events.find((event) => event.event_name === "player_hurt");
+
+    expect(death).toBeDefined();
+    expect(hurt).toBeDefined();
+    expect(Object.keys(death).some((key) => key.endsWith("_X"))).toBe(true);
+    expect(Object.keys(death).some((key) => key.endsWith("_Y"))).toBe(false);
+    expect(death.game_time).toBeDefined();
+    expect(Object.keys(hurt).some((key) => key.endsWith("_Y"))).toBe(true);
+    expect(Object.keys(hurt).some((key) => key.endsWith("_X"))).toBe(false);
+});
+test('parse_events_scoped_applies_where_clause', () => {
+    const allHurts = parseEventsScoped(scopedFilePath, [
+        { event: "player_hurt", playerProps: ["X"] },
+    ]);
+    const weapon = allHurts.find((event) => typeof event.weapon === 'string').weapon;
+    const filteredHurts = parseEventsScoped(scopedFilePath, [
+        { event: "player_hurt", playerProps: ["X"], where: { weapon } },
+    ]);
+
+    expect(filteredHurts.length).toBeGreaterThan(0);
+    expect(filteredHurts.length).toBeLessThanOrEqual(allHurts.length);
+    expect(filteredHurts.every((event) => event.weapon === weapon)).toBe(true);
 });
 test('list_game_events', () => {
     let correct_events = JSON.stringify(JSON.parse(fs.readFileSync("tests/data/list_game_events.json")));

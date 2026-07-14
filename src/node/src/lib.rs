@@ -13,6 +13,9 @@ use parser::first_pass::parser_settings::FirstPassParser;
 use parser::first_pass::parser_settings::ParserInputs;
 use parser::parse_demo::DemoOutput;
 use parser::parse_demo::Parser;
+use parser::first_pass::prop_controller::PropInfo;
+use parser::second_pass::collect_data::PropType;
+use parser::second_pass::game_events::GameEvent;
 use parser::second_pass::parser_settings::huffman_lookup_table;
 use parser::second_pass::variants::soa_to_aos;
 use parser::second_pass::variants::BytesVariant;
@@ -120,6 +123,185 @@ impl FromNapiValue for ParsedJsVariant {
 pub struct ParsedWantedPropState {
   pub prop: String,
   pub state: ParsedJsVariant,
+}
+
+#[derive(Clone)]
+pub struct ParsedScopedEventSpec {
+  pub event: String,
+  pub player_props: Vec<String>,
+  pub other_props: Vec<String>,
+  pub where_clause: HashMap<String, Variant>,
+}
+
+impl FromNapiValue for ParsedScopedEventSpec {
+  unsafe fn from_napi_value(
+    env: sys::napi_env,
+    napi_val: napi::sys::napi_value,
+  ) -> napi::Result<Self> {
+    let obj: Object = Object::from_napi_value(env, napi_val)?;
+
+    let event: String = obj.get_named_property("event")?;
+    let player_props = if obj.has_named_property("playerProps")? {
+      obj.get_named_property("playerProps")?
+    } else {
+      vec![]
+    };
+    let other_props = if obj.has_named_property("otherProps")? {
+      obj.get_named_property("otherProps")?
+    } else {
+      vec![]
+    };
+    let where_clause = if obj.has_named_property("where")? {
+      let where_map: HashMap<String, ParsedJsVariant> = obj.get_named_property("where")?;
+      where_map
+        .into_iter()
+        .map(|(key, value)| (key, value.0))
+        .collect()
+    } else {
+      HashMap::default()
+    };
+
+    Ok(ParsedScopedEventSpec {
+      event,
+      player_props,
+      other_props,
+      where_clause,
+    })
+  }
+}
+
+#[derive(Clone)]
+struct ScopedEventSpec {
+  pub event: String,
+  pub player_props: Vec<String>,
+  pub other_props: Vec<String>,
+  pub where_clause: HashMap<String, Variant>,
+}
+
+fn event_matches_where_clause(event: &GameEvent, where_clause: &HashMap<String, Variant>) -> bool {
+  where_clause.iter().all(|(field_name, wanted_value)| match field_name.as_str() {
+    "event_name" => *wanted_value == Variant::String(event.name.clone()),
+    "tick" => *wanted_value == Variant::I32(event.tick),
+    _ => event
+      .fields
+      .iter()
+      .find(|field| field.name == *field_name)
+      .and_then(|field| field.data.as_ref())
+      == Some(wanted_value),
+  })
+}
+
+fn make_player_event_field_names(prop_info: &PropInfo) -> Vec<String> {
+  let prefixes = ["user", "attacker", "assister", "victim"];
+  prefixes
+    .iter()
+    .map(|prefix| format!("{}_{}", prefix, prop_info.prop_friendly_name))
+    .collect()
+}
+
+fn make_other_event_field_names(prop_info: &PropInfo) -> Vec<String> {
+  match prop_info.prop_type {
+    PropType::Team => vec![
+      format!("t_{}", prop_info.prop_friendly_name),
+      format!("ct_{}", prop_info.prop_friendly_name),
+    ],
+    _ => vec![prop_info.prop_friendly_name.clone()],
+  }
+}
+
+fn scoped_allowed_field_names(
+  spec: &ScopedEventSpec,
+  prop_infos: &HashMap<String, PropInfo>,
+) -> HashMap<String, ()> {
+  let mut allowed = HashMap::default();
+
+  for player_meta_field in [
+    "user_name",
+    "user_steamid",
+    "attacker_name",
+    "attacker_steamid",
+    "assister_name",
+    "assister_steamid",
+    "victim_name",
+    "victim_steamid",
+  ] {
+    allowed.insert(player_meta_field.to_string(), ());
+  }
+
+  for prop_name in &spec.player_props {
+    if let Some(prop_info) = prop_infos.get(prop_name) {
+      for field_name in make_player_event_field_names(prop_info) {
+        allowed.insert(field_name, ());
+      }
+    }
+  }
+
+  for prop_name in &spec.other_props {
+    if let Some(prop_info) = prop_infos.get(prop_name) {
+      for field_name in make_other_event_field_names(prop_info) {
+        allowed.insert(field_name, ());
+      }
+    }
+  }
+
+  allowed
+}
+
+fn scoped_extra_field_names(prop_infos: &[PropInfo]) -> HashMap<String, ()> {
+  let mut extra_field_names = HashMap::default();
+
+  for prop_info in prop_infos {
+    if prop_info.is_player_prop {
+      if prop_info.prop_name == "tick" || prop_info.prop_name == "name" || prop_info.prop_name == "steamid" {
+        continue;
+      }
+      for field_name in make_player_event_field_names(prop_info) {
+        extra_field_names.insert(field_name, ());
+      }
+    } else {
+      for field_name in make_other_event_field_names(prop_info) {
+        extra_field_names.insert(field_name, ());
+      }
+    }
+  }
+
+  extra_field_names
+}
+
+fn filter_scoped_events(
+  game_events: Vec<GameEvent>,
+  scoped_specs: &[ScopedEventSpec],
+  prop_infos: &[PropInfo],
+) -> Vec<GameEvent> {
+  let prop_infos_by_name: HashMap<String, PropInfo> = prop_infos
+    .iter()
+    .map(|prop_info| (prop_info.prop_name.clone(), prop_info.clone()))
+    .collect();
+  let all_extra_field_names = scoped_extra_field_names(prop_infos);
+
+  game_events
+    .into_iter()
+    .filter_map(|mut event| {
+      let matching_specs: Vec<&ScopedEventSpec> = scoped_specs
+        .iter()
+        .filter(|spec| spec.event == event.name && event_matches_where_clause(&event, &spec.where_clause))
+        .collect();
+
+      if matching_specs.is_empty() {
+        return None;
+      }
+
+      let mut allowed_field_names: HashMap<String, (), RandomState> = HashMap::default();
+      for spec in matching_specs {
+        allowed_field_names.extend(scoped_allowed_field_names(spec, &prop_infos_by_name));
+      }
+
+      event.fields.retain(|field| {
+        !all_extra_field_names.contains_key(&field.name) || allowed_field_names.contains_key(&field.name)
+      });
+      Some(event)
+    })
+    .collect()
 }
 
 impl FromNapiValue for ParsedWantedPropState {
@@ -473,6 +655,93 @@ pub fn parse_events(
     Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
   };
   Ok(s)
+}
+
+#[napi]
+pub fn parse_events_scoped(
+  path_or_buf: Either<String, Buffer>,
+  #[napi(ts_arg_type = "Array<ScopedEventSpec>")] scoped_events: Vec<ParsedScopedEventSpec>,
+  game_event_list_bytes: Option<Buffer>,
+) -> napi::Result<Value> {
+  if scoped_events.is_empty() {
+    return Err(Error::new(Status::InvalidArg, "No scoped events provided!"));
+  }
+
+  let mut event_names = vec![];
+  let mut real_name_to_og_name = AHashMap::default();
+  let mut wanted_player_props = vec![];
+  let mut wanted_other_props = vec![];
+  let mut compiled_specs = vec![];
+
+  for scoped_event in scoped_events {
+    let real_player_props = match rm_user_friendly_names(&scoped_event.player_props) {
+      Ok(names) => names,
+      Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
+    };
+    let real_other_props = match rm_user_friendly_names(&scoped_event.other_props) {
+      Ok(names) => names,
+      Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
+    };
+
+    for (real_name, user_friendly_name) in real_player_props.iter().zip(&scoped_event.player_props) {
+      real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
+    }
+    for (real_name, user_friendly_name) in real_other_props.iter().zip(&scoped_event.other_props) {
+      real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
+    }
+
+    wanted_player_props.extend(real_player_props.iter().cloned());
+    wanted_other_props.extend(real_other_props.iter().cloned());
+    event_names.push(scoped_event.event.clone());
+    compiled_specs.push(ScopedEventSpec {
+      event: scoped_event.event,
+      player_props: real_player_props,
+      other_props: real_other_props,
+      where_clause: scoped_event.where_clause,
+    });
+  }
+
+  wanted_player_props.sort();
+  wanted_player_props.dedup();
+  wanted_other_props.sort();
+  wanted_other_props.dedup();
+  event_names.sort();
+  event_names.dedup();
+
+  let (bytes, file_path) = resolve_byte_type(path_or_buf)?;
+  let game_event_list_bytes = game_event_list_bytes.map(|buffer| buffer.to_vec());
+
+  let settings = ParserInputs {
+    real_name_to_og_name,
+    wanted_players: vec![],
+    wanted_player_props,
+    wanted_other_props,
+    wanted_prop_states: AHashMap::default(),
+    wanted_events: event_names,
+    parse_ents: true,
+    wanted_ticks: vec![],
+    parse_projectiles: false,
+    only_header: true,
+    list_props: false,
+    only_convars: false,
+    huffman_lookup_table: huffman_lookup_table(),
+    order_by_steamid: false,
+    fallback_bytes: game_event_list_bytes,
+    parse_grenades: false,
+  };
+
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
+  let mut output = parse_demo(bytes, &mut parser)?;
+  let filtered_events = filter_scoped_events(
+    std::mem::take(&mut output.game_events),
+    &compiled_specs,
+    &output.prop_controller.prop_infos,
+  );
+
+  match serde_json::to_value(&filtered_events) {
+    Ok(s) => Ok(s),
+    Err(e) => Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
+  }
 }
 
 #[napi]

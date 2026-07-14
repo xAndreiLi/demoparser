@@ -3,6 +3,13 @@
 export type JsVariant =
   boolean | string | number | bigint
 
+export interface ScopedEventSpec {
+  event: string
+  playerProps?: Array<string>
+  otherProps?: Array<string>
+  where?: Record<string, JsVariant>
+}
+
 export declare function listGameEvents(pathOrBuf: string | Buffer): any
 
 export declare function listUpdatedFields(pathOrBuf: string | Buffer): any
@@ -10,6 +17,8 @@ export declare function listUpdatedFields(pathOrBuf: string | Buffer): any
 export declare function parseEvent(pathOrBuf: string | Buffer, eventName: string, playerExtra?: Array<string> | undefined | null, otherExtra?: Array<string> | undefined | null, gameEventListBytes?: Buffer | undefined | null): any
 
 export declare function parseEvents(pathOrBuf: string | Buffer, eventNames?: Array<string> | undefined | null, playerExtra?: Array<string> | undefined | null, otherExtra?: Array<string> | undefined | null, gameEventListBytes?: Buffer | undefined | null): any
+
+export declare function parseEventsScoped(pathOrBuf: string | Buffer, scopedEvents: Array<ScopedEventSpec>, gameEventListBytes?: Buffer | undefined | null): any
 
 /**
  * extra: lets you add new fields to grenades. Use list_updated_fields for a full list.
