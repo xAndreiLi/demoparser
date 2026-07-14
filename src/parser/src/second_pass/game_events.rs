@@ -21,6 +21,8 @@ use crate::second_pass::entities::PlayerMetaData;
 use crate::second_pass::parser_settings::SecondPassParser;
 use crate::second_pass::parser_settings::SpecialIDs;
 use crate::second_pass::variants::*;
+use ahash::AHashMap;
+use ahash::AHashSet;
 use csgoproto::CMsgPlayerBulletHit;
 use csgoproto::CMsgTeFireBullets;
 use csgoproto::csvc_msg_game_event::KeyT;
@@ -34,6 +36,7 @@ use itertools::Itertools;
 use prost::Message;
 use serde::ser::SerializeMap;
 use serde::Serialize;
+use std::collections::HashMap;
 use crate::second_pass::entities::EntityType;
 use crate::first_pass::prop_controller::FLATTENED_VEC_MAX_LEN;
 use crate::first_pass::prop_controller::ITEM_PURCHASE_HANDLE;
@@ -79,6 +82,15 @@ const ENTITYIDNONE: i32 = 2047;
 // https://developer.valvesoftware.com/wiki/SteamID
 const STEAMID64INDIVIDUALIDENTIFIER: u64 = 0x0110000100000000;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScopedEventSpec {
+    pub event: String,
+    pub player_props: Vec<String>,
+    pub other_props: Vec<String>,
+    pub where_clause: AHashMap<String, Variant>,
+    pub include_all_players: bool,
+}
+
 impl<'a> SecondPassParser<'a> {
     pub fn parse_event(&mut self, bytes: &[u8]) -> Result<Option<GameEvent>, DemoParserError> {
         if self.wanted_events.len() == 0 && self.wanted_events.first() != Some(&"all".to_string()) {
@@ -119,24 +131,16 @@ impl<'a> SecondPassParser<'a> {
             });
         }
         if ENTITIES_FIRST_EVENTS.contains(&event_desc.name()) {
-            let event = GameEvent {
-                fields: event_fields,
-                name: event_desc.name().to_string(),
-                tick: self.tick,
-            };
+            let event = GameEvent::new(event_desc.name().to_string(), event_fields, self.tick);
             return Ok(Some(event));
         } else {
             // Add extra fields
             event_fields.extend(self.find_extra(&event_fields)?);
             // Remove fields that user does nothing with like userid and user_pawn
             event_fields.retain(|ref x| !INTERNALEVENTFIELDS.contains(&x.name.as_str()));
-            let mut event = GameEvent {
-                fields: event_fields,
-                name: event_desc.name().to_string(),
-                tick: self.tick,
-            };
+            let mut event = GameEvent::new(event_desc.name().to_string(), event_fields, self.tick);
             self.cleanups(&mut event);
-            self.game_events.push(event);
+            self.push_scoped_game_event(event);
         }
         Ok(None)
     }
@@ -159,14 +163,86 @@ impl<'a> SecondPassParser<'a> {
             event.fields.extend(self.find_extra(&event.fields)?);
             // Remove fields that user does nothing with like userid and user_pawn
             event.fields.retain(|ref x| !INTERNALEVENTFIELDS.contains(&x.name.as_str()));
-            let event = GameEvent {
-                fields: event.fields.clone(),
-                name: event.name.to_string(),
-                tick: self.tick,
-            };
-            self.game_events.push(event);
+            let mut resolved = GameEvent::new(event.name.to_string(), event.fields.clone(), self.tick);
+            self.cleanups(&mut resolved);
+            self.push_scoped_game_event(resolved);
         }
         Ok(())
+    }
+
+    fn event_matches_scoped_spec(event: &GameEvent, spec: &ScopedEventSpec) -> bool {
+        if spec.event != event.name {
+            return false;
+        }
+        spec.where_clause.iter().all(|(field_name, wanted_value)| match field_name.as_str() {
+            "event_name" => *wanted_value == Variant::String(event.name.clone()),
+            "tick" => *wanted_value == Variant::I32(event.tick),
+            _ => event
+                .fields
+                .iter()
+                .find(|field| field.name == *field_name)
+                .and_then(|field| field.data.as_ref())
+                == Some(wanted_value),
+        })
+    }
+
+    fn matching_scoped_specs<'b>(&'b self, event: &GameEvent) -> Vec<&'b ScopedEventSpec> {
+        self.scoped_event_specs
+            .iter()
+            .filter(|spec| Self::event_matches_scoped_spec(event, spec))
+            .collect()
+    }
+
+    fn build_all_players_snapshot(
+        &self,
+        matching_specs: &[&ScopedEventSpec],
+    ) -> Option<HashMap<String, HashMap<String, Option<Variant>>>> {
+        let mut wanted_prop_ids = AHashSet::default();
+        let mut wanted_prop_infos = vec![];
+
+        for spec in matching_specs {
+            if !spec.include_all_players {
+                continue;
+            }
+            for prop_name in &spec.player_props {
+                if let Some(prop_info) = self
+                    .prop_controller
+                    .prop_infos
+                    .iter()
+                    .find(|prop_info| prop_info.is_player_prop && prop_info.prop_name == *prop_name)
+                {
+                    if wanted_prop_ids.insert(prop_info.id) {
+                        wanted_prop_infos.push(prop_info.clone());
+                    }
+                }
+            }
+        }
+
+        if wanted_prop_infos.is_empty() {
+            return None;
+        }
+
+        let mut all_players = HashMap::default();
+        for (entity_id, player) in &self.players {
+            let Some(steamid) = player.steamid else {
+                continue;
+            };
+            let mut player_snapshot = HashMap::default();
+            for prop_info in &wanted_prop_infos {
+                player_snapshot.insert(prop_info.prop_friendly_name.clone(), self.find_prop(prop_info, entity_id, player).ok());
+            }
+            all_players.insert(steamid.to_string(), player_snapshot);
+        }
+
+        Some(all_players)
+    }
+
+    fn push_scoped_game_event(&mut self, mut event: GameEvent) {
+        let matching_specs = self.matching_scoped_specs(&event);
+        if !matching_specs.is_empty() {
+            event.all_players = self.build_all_players_snapshot(&matching_specs);
+        }
+        self.game_events.push(event);
     }
 
     pub fn find_user_by_userid(&self, userid: i32) -> Option<&UserInfo> {
@@ -483,12 +559,8 @@ impl<'a> SecondPassParser<'a> {
                     name: "tick".to_string(),
                 });
                 fields.extend(self.find_non_player_props());
-                let ge = GameEvent {
-                    name: "server_cvar".to_string(),
-                    fields: fields.clone(),
-                    tick: self.tick,
-                };
-                self.game_events.push(ge);
+                let ge = GameEvent::new("server_cvar".to_string(), fields.clone(), self.tick);
+                self.push_scoped_game_event(ge);
                 self.game_events_counter.insert("server_cvar".to_string());
             }
         }
@@ -654,12 +726,8 @@ impl<'a> SecondPassParser<'a> {
                     });
                     fields.extend(self.find_extra_props_events(*entid, "user"));
                     fields.extend(self.find_non_player_props());
-                    let ge = GameEvent {
-                        name: "item_sold".to_string(),
-                        fields,
-                        tick: self.tick,
-                    };
-                    self.game_events.push(ge);
+                    let ge = GameEvent::new("item_sold".to_string(), fields, self.tick);
+                    self.push_scoped_game_event(ge);
                     self.game_events_counter.insert("item_sold".to_string());
                 }
             }
@@ -822,12 +890,8 @@ impl<'a> SecondPassParser<'a> {
                         });
                         fields.extend(self.find_extra_props_events(purchase.entid, "user"));
                         fields.extend(self.find_non_player_props());
-                        let ge = GameEvent {
-                            name: "item_purchase".to_string(),
-                            fields,
-                            tick: self.tick,
-                        };
-                        self.game_events.push(ge);
+                        let ge = GameEvent::new("item_purchase".to_string(), fields, self.tick);
+                        self.push_scoped_game_event(ge);
                         self.game_events_counter.insert("item_purchase".to_string());
                     }
         }
@@ -897,12 +961,8 @@ impl<'a> SecondPassParser<'a> {
                 data: Some(Variant::I32(self.tick)),
                 name: "tick".to_string(),
             });
-            let ge = GameEvent {
-                name: "round_end".to_string(),
-                fields,
-                tick: self.tick,
-            };
-            self.game_events.push(ge);
+            let ge = GameEvent::new("round_end".to_string(), fields, self.tick);
+            self.push_scoped_game_event(ge);
             self.game_events_counter.insert("rank_update".to_string());
         }
 
@@ -931,12 +991,8 @@ impl<'a> SecondPassParser<'a> {
             data: Some(Variant::I32(self.tick)),
             name: "tick".to_string(),
         });
-        let ge = GameEvent {
-            name: "round_officially_ended".to_string(),
-            fields,
-            tick: self.tick,
-        };
-        self.game_events.push(ge);
+        let ge = GameEvent::new("round_officially_ended".to_string(), fields, self.tick);
+        self.push_scoped_game_event(ge);
 
         Ok(())
     }
@@ -953,12 +1009,8 @@ impl<'a> SecondPassParser<'a> {
             data: Some(Variant::I32(self.tick)),
             name: "tick".to_string(),
         });
-        let ge = GameEvent {
-            name: "cs_win_panel_match".to_string(),
-            fields,
-            tick: self.tick,
-        };
-        self.game_events.push(ge);
+        let ge = GameEvent::new("cs_win_panel_match".to_string(), fields, self.tick);
+        self.push_scoped_game_event(ge);
 
         Ok(())
     }
@@ -1003,12 +1055,8 @@ impl<'a> SecondPassParser<'a> {
             name: "tick".to_string(),
         });
         fields.extend(self.find_non_player_props());
-        let ge = GameEvent {
-            name: "chat_message".to_string(),
-            fields,
-            tick: self.tick,
-        };
-        self.game_events.push(ge);
+        let ge = GameEvent::new("chat_message".to_string(), fields, self.tick);
+        self.push_scoped_game_event(ge);
         Ok(())
     }
     pub fn create_custom_event_server_message(&mut self, msg_bytes: &[u8]) -> Result<(), DemoParserError> {
@@ -1030,12 +1078,8 @@ impl<'a> SecondPassParser<'a> {
             name: "tick".to_string(),
         });
         fields.extend(self.find_non_player_props());
-        let ge = GameEvent {
-            name: "server_message".to_string(),
-            fields,
-            tick: self.tick,
-        };
-        self.game_events.push(ge);
+        let ge = GameEvent::new("server_message".to_string(), fields, self.tick);
+        self.push_scoped_game_event(ge);
         Ok(())
     }
 
@@ -1054,12 +1098,8 @@ impl<'a> SecondPassParser<'a> {
             name: "tick".to_string(),
         });
         fields.extend(self.find_non_player_props());
-        let ge = GameEvent {
-            name: "round_start".to_string(),
-            fields,
-            tick: self.tick,
-        };
-        self.game_events.push(ge);
+        let ge = GameEvent::new("round_start".to_string(), fields, self.tick);
+        self.push_scoped_game_event(ge);
         Ok(())
     }
 
@@ -1139,13 +1179,9 @@ impl<'a> SecondPassParser<'a> {
             data: msg.is_kill.map(Variant::Bool),
         });
 
-        let ge = GameEvent {
-            name: "player_bullet_hit".to_string(),
-            fields,
-            tick: self.tick,
-        };
+        let ge = GameEvent::new("player_bullet_hit".to_string(), fields, self.tick);
 
-        self.game_events.push(ge);
+        self.push_scoped_game_event(ge);
 
         Ok(())
     }
@@ -1188,12 +1224,8 @@ impl<'a> SecondPassParser<'a> {
         let entity_id = player_metadata.player_entity_id.unwrap_or(0);
         fields.extend(self.find_extra_props_events(entity_id, "user"));
 
-        let ge = GameEvent {
-            name: "player_first_connect".to_string(),
-            fields,
-            tick: self.tick,
-        };
-        self.game_events.push(ge);
+        let ge = GameEvent::new("player_first_connect".to_string(), fields, self.tick);
+        self.push_scoped_game_event(ge);
     
         Ok(())
     }
@@ -1347,12 +1379,8 @@ impl<'a> SecondPassParser<'a> {
         fields.push(self.create_player_steamid_field(entity_id, "user"));
         fields.extend(self.find_extra_props_events(entity_id, "user"));
 
-        let ge = GameEvent {
-            name: "fire_bullets".to_string(),
-            fields,
-            tick: self.tick,
-        };
-        self.game_events.push(ge);
+        let ge = GameEvent::new("fire_bullets".to_string(), fields, self.tick);
+        self.push_scoped_game_event(ge);
         Ok(())
     }
 
@@ -1404,12 +1432,8 @@ impl<'a> SecondPassParser<'a> {
                 name: "tick".to_string(),
             });
             fields.extend(self.find_non_player_props());
-            let ge = GameEvent {
-                name: "rank_update".to_string(),
-                fields,
-                tick: self.tick,
-            };
-            self.game_events.push(ge);
+            let ge = GameEvent::new("rank_update".to_string(), fields, self.tick);
+            self.push_scoped_game_event(ge);
         }
         Ok(())
     }
@@ -1520,6 +1544,18 @@ pub struct GameEvent {
     pub name: String,
     pub fields: Vec<EventField>,
     pub tick: i32,
+    pub all_players: Option<HashMap<String, HashMap<String, Option<Variant>>>>,
+}
+
+impl GameEvent {
+    pub fn new(name: String, fields: Vec<EventField>, tick: i32) -> Self {
+        Self {
+            name,
+            fields,
+            tick,
+            all_players: None,
+        }
+    }
 }
 
 impl Serialize for GameEvent {
@@ -1532,6 +1568,9 @@ impl Serialize for GameEvent {
         map.serialize_entry(&"event_name", &self.name)?;
         for field in &self.fields {
             map.serialize_entry(&field.name, &field.data)?;
+        }
+        if let Some(all_players) = &self.all_players {
+            map.serialize_entry(&"all_players", all_players)?;
         }
         map.end()
     }

@@ -3,13 +3,6 @@
 export type JsVariant =
   boolean | string | number | bigint
 
-export interface ScopedEventSpec {
-  event: string
-  playerProps?: Array<string>
-  otherProps?: Array<string>
-  where?: Record<string, JsVariant>
-}
-
 export declare function listGameEvents(pathOrBuf: string | Buffer): any
 
 export declare function listUpdatedFields(pathOrBuf: string | Buffer): any

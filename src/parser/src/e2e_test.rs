@@ -15444,6 +15444,7 @@ mod tests {
                     },
                 ],
                 tick: 1,
+            all_players: None,
             }],
         );
         assert_eq!(out.2["hltv_versioninfo"], prop.1);
@@ -15461,6 +15462,7 @@ mod tests {
                         data: Some(I32(1761)),
                     }],
                     tick: 1761,
+                all_players: None,
                 },
                 GameEvent {
                     name: "round_freeze_end".to_string(),
@@ -15469,6 +15471,7 @@ mod tests {
                         data: Some(I32(10699)),
                     }],
                     tick: 10699,
+                all_players: None,
                 },
             ],
         );
@@ -15497,6 +15500,7 @@ mod tests {
                         },
                     ],
                     tick: 1991,
+                all_players: None,
                 },
                 GameEvent {
                     name: "weapon_reload".to_string(),
@@ -15515,6 +15519,7 @@ mod tests {
                         },
                     ],
                     tick: 2016,
+                all_players: None,
                 },
             ],
         );
@@ -15533,6 +15538,7 @@ mod tests {
                         data: Some(I32(46)),
                     }],
                     tick: 46,
+                all_players: None,
                 },
                 GameEvent {
                     name: "cs_pre_restart".to_string(),
@@ -15541,6 +15547,7 @@ mod tests {
                         data: Some(I32(9400)),
                     }],
                     tick: 9400,
+                all_players: None,
                 },
             ],
         );
@@ -15577,6 +15584,7 @@ mod tests {
                         },
                     ],
                     tick: 1977,
+                all_players: None,
                 },
                 GameEvent {
                     name: "weapon_fire".to_string(),
@@ -15603,6 +15611,7 @@ mod tests {
                         },
                     ],
                     tick: 1996,
+                all_players: None,
                 },
             ],
         );
@@ -15719,6 +15728,7 @@ mod tests {
                         },
                     ],
                     tick: 3086,
+                all_players: None,
                 },
                 GameEvent {
                     name: "player_death".to_string(),
@@ -15825,6 +15835,7 @@ mod tests {
                         },
                     ],
                     tick: 4285,
+                all_players: None,
                 },
             ],
         );
@@ -15869,6 +15880,7 @@ mod tests {
                         },
                     ],
                     tick: 4437,
+                all_players: None,
                 },
                 GameEvent {
                     name: "smokegrenade_expired".to_string(),
@@ -15903,6 +15915,7 @@ mod tests {
                         },
                     ],
                     tick: 12694,
+                all_players: None,
                 },
             ],
         );
@@ -15963,6 +15976,7 @@ mod tests {
                         },
                     ],
                     tick: 23,
+                all_players: None,
                 },
                 GameEvent {
                     name: "item_equip".to_string(),
@@ -16013,6 +16027,7 @@ mod tests {
                         },
                     ],
                     tick: 23,
+                all_players: None,
                 },
             ],
         );
@@ -16045,6 +16060,7 @@ mod tests {
                         },
                     ],
                     tick: 8259,
+                all_players: None,
                 },
                 GameEvent {
                     name: "bomb_planted".to_string(),
@@ -16067,6 +16083,7 @@ mod tests {
                         },
                     ],
                     tick: 13361,
+                all_players: None,
                 },
             ],
         );
@@ -16099,6 +16116,7 @@ mod tests {
                         },
                     ],
                     tick: 38820,
+                all_players: None,
                 },
                 GameEvent {
                     name: "bomb_exploded".to_string(),
@@ -16121,6 +16139,7 @@ mod tests {
                         },
                     ],
                     tick: 51718,
+                all_players: None,
                 },
             ],
         );
@@ -16139,6 +16158,7 @@ mod tests {
                         data: Some(I32(65)),
                     }],
                     tick: 65,
+                all_players: None,
                 },
                 GameEvent {
                     name: "round_prestart".to_string(),
@@ -16147,6 +16167,7 @@ mod tests {
                         data: Some(I32(9419)),
                     }],
                     tick: 9419,
+                all_players: None,
                 },
             ],
         );
@@ -16165,6 +16186,7 @@ mod tests {
                         data: Some(I32(1761)),
                     }],
                     tick: 1761,
+                all_players: None,
                 },
                 GameEvent {
                     name: "cs_round_final_beep".to_string(),
@@ -16173,6 +16195,7 @@ mod tests {
                         data: Some(I32(10699)),
                     }],
                     tick: 10699,
+                all_players: None,
                 },
             ],
         );
@@ -16217,6 +16240,7 @@ mod tests {
                         },
                     ],
                     tick: 3025,
+                all_players: None,
                 },
                 GameEvent {
                     name: "smokegrenade_detonate".to_string(),
@@ -16251,6 +16275,7 @@ mod tests {
                         },
                     ],
                     tick: 11282,
+                all_players: None,
                 },
             ],
         );
@@ -16279,6 +16304,7 @@ mod tests {
                         },
                     ],
                     tick: 1823,
+                all_players: None,
                 },
                 GameEvent {
                     name: "player_footstep".to_string(),
@@ -16297,6 +16323,7 @@ mod tests {
                         },
                     ],
                     tick: 1843,
+                all_players: None,
                 },
             ],
         );
@@ -16315,6 +16342,7 @@ mod tests {
                         data: Some(I32(65)),
                     }],
                     tick: 65,
+                all_players: None,
                 },
                 GameEvent {
                     name: "buytime_ended".to_string(),
@@ -16323,6 +16351,7 @@ mod tests {
                         data: Some(I32(3042)),
                     }],
                     tick: 3042,
+                all_players: None,
                 },
             ],
         );
@@ -16351,6 +16380,7 @@ mod tests {
                         },
                     ],
                     tick: 1823,
+                all_players: None,
                 },
                 GameEvent {
                     name: "player_jump".to_string(),
@@ -16369,6 +16399,7 @@ mod tests {
                         },
                     ],
                     tick: 2058,
+                all_players: None,
                 },
             ],
         );
@@ -16397,6 +16428,7 @@ mod tests {
                         },
                     ],
                     tick: 11111,
+                all_players: None,
                 },
                 GameEvent {
                     name: "weapon_zoom".to_string(),
@@ -16415,6 +16447,7 @@ mod tests {
                         },
                     ],
                     tick: 11130,
+                all_players: None,
                 },
             ],
         );
@@ -16433,6 +16466,7 @@ mod tests {
                         data: Some(I32(65)),
                     }],
                     tick: 65,
+                all_players: None,
                 },
                 GameEvent {
                     name: "round_poststart".to_string(),
@@ -16441,6 +16475,7 @@ mod tests {
                         data: Some(I32(9419)),
                     }],
                     tick: 9419,
+                all_players: None,
                 },
             ],
         );
@@ -16469,6 +16504,7 @@ mod tests {
                         },
                     ],
                     tick: 65,
+                all_players: None,
                 },
                 GameEvent {
                     name: "bomb_pickup".to_string(),
@@ -16487,6 +16523,7 @@ mod tests {
                         },
                     ],
                     tick: 5839,
+                all_players: None,
                 },
             ],
         );
@@ -16531,6 +16568,7 @@ mod tests {
                         },
                     ],
                     tick: 4213,
+                all_players: None,
                 },
                 GameEvent {
                     name: "player_blind".to_string(),
@@ -16565,6 +16603,7 @@ mod tests {
                         },
                     ],
                     tick: 4213,
+                all_players: None,
                 },
             ],
         );
@@ -16596,6 +16635,7 @@ mod tests {
                     },
                 ],
                 tick: 14592,
+            all_players: None,
             }],
         );
         assert_eq!(out.2["bomb_begindefuse"], prop.1);
@@ -16639,6 +16679,7 @@ mod tests {
                         },
                     ],
                     tick: 17282,
+                all_players: None,
                 },
                 GameEvent {
                     name: "inferno_startburn".to_string(),
@@ -16673,6 +16714,7 @@ mod tests {
                         },
                     ],
                     tick: 17690,
+                all_players: None,
                 },
             ],
         );
@@ -16721,6 +16763,7 @@ mod tests {
                         },
                     ],
                     tick: 55752,
+                all_players: None,
                 },
                 GameEvent {
                     name: "player_disconnect".to_string(),
@@ -16759,6 +16802,7 @@ mod tests {
                         },
                     ],
                     tick: 57208,
+                all_players: None,
                 },
             ],
         );
@@ -16819,6 +16863,7 @@ mod tests {
                         },
                     ],
                     tick: 3086,
+                all_players: None,
                 },
                 GameEvent {
                     name: "player_hurt".to_string(),
@@ -16869,6 +16914,7 @@ mod tests {
                         },
                     ],
                     tick: 3917,
+                all_players: None,
                 },
             ],
         );
@@ -16901,6 +16947,7 @@ mod tests {
                         },
                     ],
                     tick: 8049,
+                all_players: None,
                 },
                 GameEvent {
                     name: "bomb_beginplant".to_string(),
@@ -16923,6 +16970,7 @@ mod tests {
                         },
                     ],
                     tick: 13164,
+                all_players: None,
                 },
             ],
         );
@@ -16941,6 +16989,7 @@ mod tests {
                         data: Some(I32(9419)),
                     }],
                     tick: 9419,
+                all_players: None,
                 },
                 GameEvent {
                     name: "round_officially_ended".to_string(),
@@ -16949,6 +16998,7 @@ mod tests {
                         data: Some(I32(15680)),
                     }],
                     tick: 15680,
+                all_players: None,
                 },
             ],
         );
@@ -16989,6 +17039,7 @@ mod tests {
                         },
                     ],
                     tick: 65,
+                all_players: None,
                 },
                 GameEvent {
                     name: "item_pickup".to_string(),
@@ -17019,6 +17070,7 @@ mod tests {
                         },
                     ],
                     tick: 65,
+                all_players: None,
                 },
             ],
         );
@@ -17047,6 +17099,7 @@ mod tests {
                         },
                     ],
                     tick: 65,
+                all_players: None,
                 },
                 GameEvent {
                     name: "player_spawn".to_string(),
@@ -17065,6 +17118,7 @@ mod tests {
                         },
                     ],
                     tick: 65,
+                all_players: None,
                 },
             ],
         );
@@ -17137,6 +17191,7 @@ mod tests {
                         },
                     ],
                     tick: 1977,
+                all_players: None,
                 },
                 GameEvent {
                     name: "other_death".to_string(),
@@ -17199,6 +17254,7 @@ mod tests {
                         },
                     ],
                     tick: 1996,
+                all_players: None,
                 },
             ],
         );
@@ -17230,6 +17286,7 @@ mod tests {
                     },
                 ],
                 tick: 15232,
+            all_players: None,
             }],
         );
         assert_eq!(out.2["bomb_defused"], prop.1);
@@ -17246,6 +17303,7 @@ mod tests {
                     data: Some(I32(67)),
                 }],
                 tick: 67,
+            all_players: None,
             }],
         );
         assert_eq!(out.2["begin_new_match"], prop.1);
@@ -17301,6 +17359,7 @@ mod tests {
                         },
                     ],
                     tick: 8971,
+                all_players: None,
                 },
                 GameEvent {
                     name: "cs_win_panel_round".to_string(),
@@ -17347,6 +17406,7 @@ mod tests {
                         },
                     ],
                     tick: 15232,
+                all_players: None,
                 },
             ],
         );
@@ -17364,6 +17424,7 @@ mod tests {
                     data: Some(I32(56898)),
                 }],
                 tick: 56898,
+            all_players: None,
             }],
         );
         assert_eq!(out.2["cs_win_panel_match"], prop.1);
@@ -17381,6 +17442,7 @@ mod tests {
                         data: Some(I32(1570)),
                     }],
                     tick: 1570,
+                all_players: None,
                 },
                 GameEvent {
                     name: "cs_round_start_beep".to_string(),
@@ -17389,6 +17451,7 @@ mod tests {
                         data: Some(I32(1634)),
                     }],
                     tick: 1634,
+                all_players: None,
                 },
             ],
         );
@@ -17421,6 +17484,7 @@ mod tests {
                         },
                     ],
                     tick: 4285,
+                all_players: None,
                 },
                 GameEvent {
                     name: "bomb_dropped".to_string(),
@@ -17443,6 +17507,7 @@ mod tests {
                         },
                     ],
                     tick: 15949,
+                all_players: None,
                 },
             ],
         );
@@ -17487,6 +17552,7 @@ mod tests {
                         },
                     ],
                     tick: 17732,
+                all_players: None,
                 },
                 GameEvent {
                     name: "inferno_expire".to_string(),
@@ -17521,6 +17587,7 @@ mod tests {
                         },
                     ],
                     tick: 18140,
+                all_players: None,
                 },
             ],
         );
@@ -17565,6 +17632,7 @@ mod tests {
                         },
                     ],
                     tick: 8971,
+                all_players: None,
                 },
                 GameEvent {
                     name: "round_end".to_string(),
@@ -17599,6 +17667,7 @@ mod tests {
                         },
                     ],
                     tick: 15232,
+                all_players: None,
                 },
             ],
         );
@@ -17631,6 +17700,7 @@ mod tests {
                         },
                     ],
                     tick: 65,
+                all_players: None,
                 },
                 GameEvent {
                     name: "round_start".to_string(),
@@ -17653,6 +17723,7 @@ mod tests {
                         },
                     ],
                     tick: 9419,
+                all_players: None,
                 },
             ],
         );
@@ -17670,6 +17741,7 @@ mod tests {
                     data: Some(I32(8482)),
                 }],
                 tick: 8482,
+            all_players: None,
             }],
         );
         assert_eq!(out.2["round_time_warning"], prop.1);
@@ -17737,6 +17809,7 @@ mod tests {
                         },
                     ],
                     tick: 1,
+                all_players: None,
                 },
                 GameEvent {
                     name: "item_purchase".to_string(),
@@ -17795,6 +17868,7 @@ mod tests {
                         },
                     ],
                     tick: 1,
+                all_players: None,
                 },
             ],
         );
@@ -17840,6 +17914,7 @@ mod tests {
                         },
                     ],
                     tick: 4213,
+                all_players: None,
                 },
                 GameEvent {
                     name: "flashbang_detonate".to_string(),
@@ -17874,6 +17949,7 @@ mod tests {
                         },
                     ],
                     tick: 11213,
+                all_players: None,
                 },
             ],
         );
@@ -17922,6 +17998,7 @@ mod tests {
                         },
                     ],
                     tick: 8971,
+                all_players: None,
                 },
                 GameEvent {
                     name: "round_mvp".to_string(),
@@ -17960,6 +18037,7 @@ mod tests {
                         },
                     ],
                     tick: 15232,
+                all_players: None,
                 },
             ],
         );
@@ -17977,6 +18055,7 @@ mod tests {
                     data: Some(I32(1761)),
                 }],
                 tick: 1761,
+            all_players: None,
             }],
         );
         assert_eq!(out.2["round_announce_match_start"], prop.1);
@@ -18020,6 +18099,7 @@ mod tests {
                         },
                     ],
                     tick: 3279,
+                all_players: None,
                 },
                 GameEvent {
                     name: "hegrenade_detonate".to_string(),
@@ -18054,6 +18134,7 @@ mod tests {
                         },
                     ],
                     tick: 3583,
+                all_players: None,
                 },
             ],
         );

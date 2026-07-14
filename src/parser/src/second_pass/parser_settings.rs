@@ -9,7 +9,7 @@ use crate::second_pass::collect_data::ProjectileRecord;
 use crate::second_pass::decoder::QfMapper;
 use crate::second_pass::entities::Entity;
 use crate::second_pass::entities::PlayerMetaData;
-use crate::second_pass::game_events::GameEvent;
+use crate::second_pass::game_events::{GameEvent, ScopedEventSpec};
 use crate::second_pass::other_netmessages::Class;
 use crate::second_pass::parser::SecondPassOutput;
 use crate::second_pass::path_ops::FieldPath;
@@ -23,6 +23,7 @@ use csgoproto::CsvcMsgVoiceData;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::env;
+use std::sync::Arc;
 const HUF_LOOKUPTABLE_MAXVALUE: u32 = (1 << 17) - 1;
 const DEFAULT_MAX_ENTITY_ID: usize = 1024;
 
@@ -77,6 +78,7 @@ pub struct SecondPassParser<'a> {
     pub last_tick: i32,
     pub parse_usercmd: bool,
     pub list_props: bool,
+    pub scoped_event_specs: Arc<Vec<ScopedEventSpec>>,
 }
 #[derive(Debug, Clone)]
 pub struct Teams {
@@ -164,6 +166,7 @@ impl<'a> SecondPassParser<'a> {
         offset: usize,
         parse_all_packets: bool,
         start_end_offset: Option<StartEndOffset>,
+        scoped_event_specs: Arc<Vec<ScopedEventSpec>>,
     ) -> Result<Self, DemoParserError> {
         first_pass_output
             .settings
@@ -178,6 +181,7 @@ impl<'a> SecondPassParser<'a> {
             parse_usercmd: contains_usercmd_prop(&first_pass_output.settings.wanted_player_props),
             last_tick: 0,
             start_end_offset: start_end_offset,
+            scoped_event_specs,
             order_by_steamid: first_pass_output.order_by_steamid,
             df_per_player: AHashMap::default(),
             voice_data: vec![],

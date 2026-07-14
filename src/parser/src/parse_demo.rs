@@ -5,7 +5,7 @@ use crate::first_pass::parser_settings::{FirstPassParser, ParserInputs};
 use crate::first_pass::prop_controller::{PropController, NAME_ID, STEAMID_ID, TICK_ID};
 use crate::first_pass::read_bits::DemoParserError;
 use crate::second_pass::collect_data::ProjectileRecord;
-use crate::second_pass::game_events::{EventField, GameEvent};
+use crate::second_pass::game_events::{EventField, GameEvent, ScopedEventSpec};
 use crate::second_pass::parser::SecondPassOutput;
 use crate::second_pass::parser_settings::*;
 use crate::second_pass::variants::VarVec;
@@ -83,6 +83,7 @@ pub struct Parser<'a> {
     /// Canonical file-system path of the demo, if it was opened from a file.
     /// Used as the cache key for the first-pass structure cache.
     pub file_path: Option<String>,
+    pub scoped_event_specs: Arc<Vec<ScopedEventSpec>>,
 }
 #[derive(PartialEq)]
 pub enum ParsingMode {
@@ -97,6 +98,7 @@ impl<'a> Parser<'a> {
             input: input,
             parsing_mode: parsing_mode,
             file_path: None,
+            scoped_event_specs: Arc::new(vec![]),
         }
     }
 
@@ -104,6 +106,11 @@ impl<'a> Parser<'a> {
     /// reuse the settings-independent first-pass results across calls.
     pub fn with_file_path(mut self, path: Option<String>) -> Self {
         self.file_path = path;
+        self
+    }
+
+    pub fn with_scoped_event_specs(mut self, specs: Vec<ScopedEventSpec>) -> Self {
+        self.scoped_event_specs = Arc::new(specs);
         self
     }
 
@@ -156,7 +163,13 @@ impl<'a> Parser<'a> {
             .fullpacket_offsets
             .par_iter()
             .map(|offset| {
-                let mut parser = SecondPassParser::new(first_pass_output.clone(), *offset, false, None)?;
+                let mut parser = SecondPassParser::new(
+                    first_pass_output.clone(),
+                    *offset,
+                    false,
+                    None,
+                    Arc::clone(&self.scoped_event_specs),
+                )?;
                 parser.start(outer_bytes)?;
                 Ok(parser.create_output())
             })
@@ -202,7 +215,13 @@ impl<'a> Parser<'a> {
     fn second_pass_single_threaded(&self, outer_bytes: &[u8], first_pass_output: FirstPassOutput) -> Result<DemoOutput, DemoParserError> {
         let prof = std::env::var("CS2_PROF").is_ok();
         let mut t = std::time::Instant::now();
-        let mut parser = SecondPassParser::new(first_pass_output.clone(), 16, true, None)?;
+        let mut parser = SecondPassParser::new(
+            first_pass_output.clone(),
+            16,
+            true,
+            None,
+            Arc::clone(&self.scoped_event_specs),
+        )?;
         parser.start(outer_bytes)?;
         if prof { eprintln!("[prof] second_pass start(): {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
         let second_pass_output = parser.create_output();
@@ -237,8 +256,15 @@ impl<'a> Parser<'a> {
                         }
                     }
                     let my_first_out = first_pass_output.clone();
+                    let scoped_event_specs = Arc::clone(&self.scoped_event_specs);
                     handles.push(s.spawn(move || {
-                        let mut parser = SecondPassParser::new(my_first_out, start_end_offset.start, false, Some(start_end_offset))?;
+                        let mut parser = SecondPassParser::new(
+                            my_first_out,
+                            start_end_offset.start,
+                            false,
+                            Some(start_end_offset),
+                            scoped_event_specs,
+                        )?;
                         parser.start(outer_bytes)?;
                         Ok(parser.create_output())
                     }));
@@ -277,7 +303,13 @@ impl<'a> Parser<'a> {
             .fullpacket_offsets
             .par_iter()
             .map(|offset| {
-                let mut parser = SecondPassParser::new(first_pass_output.clone(), *offset, false, None)?;
+                let mut parser = SecondPassParser::new(
+                    first_pass_output.clone(),
+                    *offset,
+                    false,
+                    None,
+                    Arc::clone(&self.scoped_event_specs),
+                )?;
                 parser.start(outer_bytes)?;
                 Ok(parser.create_output())
             })

@@ -15,7 +15,7 @@ use parser::parse_demo::DemoOutput;
 use parser::parse_demo::Parser;
 use parser::first_pass::prop_controller::PropInfo;
 use parser::second_pass::collect_data::PropType;
-use parser::second_pass::game_events::GameEvent;
+use parser::second_pass::game_events::{GameEvent, ScopedEventSpec};
 use parser::second_pass::parser_settings::huffman_lookup_table;
 use parser::second_pass::variants::soa_to_aos;
 use parser::second_pass::variants::BytesVariant;
@@ -131,6 +131,7 @@ pub struct ParsedScopedEventSpec {
   pub player_props: Vec<String>,
   pub other_props: Vec<String>,
   pub where_clause: HashMap<String, Variant>,
+  pub include_all_players: bool,
 }
 
 impl FromNapiValue for ParsedScopedEventSpec {
@@ -160,25 +161,30 @@ impl FromNapiValue for ParsedScopedEventSpec {
     } else {
       HashMap::default()
     };
+    let include_all_players = if obj.has_named_property("includeAllPlayers")? {
+      obj.get_named_property("includeAllPlayers")?
+    } else {
+      false
+    };
 
     Ok(ParsedScopedEventSpec {
       event,
       player_props,
       other_props,
       where_clause,
+      include_all_players,
     })
   }
 }
 
-#[derive(Clone)]
-struct ScopedEventSpec {
-  pub event: String,
-  pub player_props: Vec<String>,
-  pub other_props: Vec<String>,
-  pub where_clause: HashMap<String, Variant>,
+fn matching_scoped_specs<'a>(event: &GameEvent, scoped_specs: &'a [ScopedEventSpec]) -> Vec<&'a ScopedEventSpec> {
+  scoped_specs
+    .iter()
+    .filter(|spec| spec.event == event.name && event_matches_where_clause(event, &spec.where_clause))
+    .collect()
 }
 
-fn event_matches_where_clause(event: &GameEvent, where_clause: &HashMap<String, Variant>) -> bool {
+fn event_matches_where_clause(event: &GameEvent, where_clause: &AHashMap<String, Variant>) -> bool {
   where_clause.iter().all(|(field_name, wanted_value)| match field_name.as_str() {
     "event_name" => *wanted_value == Variant::String(event.name.clone()),
     "tick" => *wanted_value == Variant::I32(event.tick),
@@ -282,10 +288,7 @@ fn filter_scoped_events(
   game_events
     .into_iter()
     .filter_map(|mut event| {
-      let matching_specs: Vec<&ScopedEventSpec> = scoped_specs
-        .iter()
-        .filter(|spec| spec.event == event.name && event_matches_where_clause(&event, &spec.where_clause))
-        .collect();
+      let matching_specs = matching_scoped_specs(&event, scoped_specs);
 
       if matching_specs.is_empty() {
         return None;
@@ -363,7 +366,7 @@ pub fn parse_voice(path_or_buf: Either<String, Buffer>) -> napi::Result<Vec<Voic
     fallback_bytes: None,
     parse_grenades: false,
   };
-  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path.clone());
   let output = parse_demo(bytes, &mut parser)?;
   let mut out = vec![];
 
@@ -401,7 +404,7 @@ pub fn list_game_events(path_or_buf: Either<String, Buffer>) -> napi::Result<Val
     fallback_bytes: None,
     parse_grenades: false,
   };
-  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path.clone());
   let output = parse_demo(bytes, &mut parser)?;
 
   let v = Vec::from_iter(output.game_events_counter.iter());
@@ -697,7 +700,8 @@ pub fn parse_events_scoped(
       event: scoped_event.event,
       player_props: real_player_props,
       other_props: real_other_props,
-      where_clause: scoped_event.where_clause,
+      where_clause: scoped_event.where_clause.into_iter().collect(),
+      include_all_players: scoped_event.include_all_players,
     });
   }
 
@@ -712,7 +716,7 @@ pub fn parse_events_scoped(
   let game_event_list_bytes = game_event_list_bytes.map(|buffer| buffer.to_vec());
 
   let settings = ParserInputs {
-    real_name_to_og_name,
+    real_name_to_og_name: real_name_to_og_name.clone(),
     wanted_players: vec![],
     wanted_player_props,
     wanted_other_props,
@@ -730,12 +734,14 @@ pub fn parse_events_scoped(
     parse_grenades: false,
   };
 
-  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path);
+  let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path)
+    .with_scoped_event_specs(compiled_specs.clone());
   let mut output = parse_demo(bytes, &mut parser)?;
+  let prop_infos = output.prop_controller.prop_infos.clone();
   let filtered_events = filter_scoped_events(
     std::mem::take(&mut output.game_events),
     &compiled_specs,
-    &output.prop_controller.prop_infos,
+    &prop_infos,
   );
 
   match serde_json::to_value(&filtered_events) {

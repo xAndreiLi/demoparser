@@ -50,6 +50,20 @@ test('parse_events_scoped_applies_where_clause', () => {
     expect(filteredHurts.length).toBeLessThanOrEqual(allHurts.length);
     expect(filteredHurts.every((event) => event.weapon === weapon)).toBe(true);
 });
+test('parse_events_scoped_include_all_players_adds_nested_player_snapshots', () => {
+    const events = parseEventsScoped(scopedFilePath, [
+        { event: "player_hurt", playerProps: ["X"], includeAllPlayers: true },
+    ]);
+
+    const hurt = events.find((event) => event.event_name === "player_hurt");
+    expect(hurt).toBeDefined();
+    expect(hurt.all_players).toBeDefined();
+    const playerIds = Object.keys(hurt.all_players);
+    expect(playerIds.length).toBeGreaterThan(1);
+    const firstPlayer = hurt.all_players[playerIds[0]];
+    expect(Object.prototype.hasOwnProperty.call(firstPlayer, 'X')).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(firstPlayer, 'Y')).toBe(false);
+});
 test('list_game_events', () => {
     let correct_events = JSON.stringify(JSON.parse(fs.readFileSync("tests/data/list_game_events.json")));
     let events_arr = listGameEvents(filePath);
