@@ -217,6 +217,65 @@ start from any `DemFullPacket` offset independently.
   let output = parse_demo(bytes, &mut parser)?;
   ```
 
+### Scoped event parsing (`parseEventsScoped`)
+
+- The Node binding now passes scoped event configuration into the **core parser** via
+  `Parser::with_scoped_event_specs(...)` in `src/parser/src/parse_demo.rs`.
+- `SecondPassParser` stores these specs in `scoped_event_specs: Arc<Vec<ScopedEventSpec>>`
+  (`src/parser/src/second_pass/parser_settings.rs`).
+- The core event implementation lives in `src/parser/src/second_pass/game_events.rs`.
+
+#### ScopedEventSpec model
+- `ScopedEventSpec` currently carries:
+  - `event`
+  - `player_props`
+  - `other_props`
+  - `where_clause`
+  - `include_all_players`
+  - `tick_filter`
+
+#### `where_clause` vs `tick_filter`
+- `where_clause` is used to decide whether a returned event matches a scoped spec.
+- `tick_filter` is **not** a JS callback; it is a declarative core-side filter evaluated in Rust.
+- `tick_filter` is evaluated against **raw event fields** before `find_extra(...)` runs.
+- If `tick_filter` fails:
+  - the event is still emitted
+  - scoped extra props are skipped
+  - `all_players` is skipped
+- `tick_filter` currently supports:
+  - `eq`
+  - `neq`
+  - `in`
+- The right-hand side can be either:
+  - a static `Variant`
+  - another event field (`TickFilterValue::Field`)
+
+#### `include_all_players`
+- `include_all_players` is now built in the **same second pass** as event parsing.
+- It no longer triggers a Node-side follow-up `parseTicks(orderBySteamid=true)` call.
+- The snapshot is attached to `GameEvent.all_players` and serialized from the core.
+- The snapshot is built from the current live `self.players` state at the event tick and only includes the requested scoped player props.
+
+#### Filtering stages in the current implementation
+- Raw event decode
+- Scoped `tick_filter` gate for expensive enrichment
+- `find_extra(...)` scoped extra prop materialization (only when gated in)
+- `push_scoped_game_event(...)` optional `all_players` snapshot attachment
+- Node-side final field filtering to hide props not requested by the matching scoped spec(s)
+
+#### Important invariants
+- `tick_filter` is **raw-event-field-only** in the current implementation.
+  It cannot reference enriched fields like `user_X`, `game_time`, or `all_players`.
+- `parseEventsScoped` is still expected to return the base event stream even when `tick_filter` fails.
+  The filter only suppresses expensive enrichment, not event emission.
+- If you add new custom events in `game_events.rs`, route them through `push_scoped_game_event(...)`
+  instead of calling `self.game_events.push(...)` directly, otherwise scoped `all_players` snapshots are bypassed.
+- If you create `GameEvent` literals in Rust tests, either use `GameEvent::new(...)` or set `all_players: None` explicitly.
+
+#### Performance insight
+- `parseEventsScoped` without `include_all_players` is the cheapest scoped workflow.
+- `include_all_players` increases payload size and some per-event work, but remains much faster than re-running a second pass via `parseTicks`.
+
 ---
 
 ## Known quirks

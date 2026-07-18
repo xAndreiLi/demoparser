@@ -83,12 +83,34 @@ const ENTITYIDNONE: i32 = 2047;
 const STEAMID64INDIVIDUALIDENTIFIER: u64 = 0x0110000100000000;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TickFilterValue {
+    Value(Variant),
+    Field(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TickFilterOp {
+    Eq,
+    Neq,
+    In,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TickFilterClause {
+    pub field: String,
+    pub op: TickFilterOp,
+    pub value: Option<TickFilterValue>,
+    pub values: Vec<TickFilterValue>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScopedEventSpec {
     pub event: String,
     pub player_props: Vec<String>,
     pub other_props: Vec<String>,
     pub where_clause: AHashMap<String, Variant>,
     pub include_all_players: bool,
+    pub tick_filter: Vec<TickFilterClause>,
 }
 
 impl<'a> SecondPassParser<'a> {
@@ -130,15 +152,20 @@ impl<'a> SecondPassParser<'a> {
                 data: val,
             });
         }
+        let event_name = event_desc.name().to_string();
+        let raw_event = GameEvent::new(event_name.clone(), event_fields.clone(), self.tick);
+        let should_collect_scoped_data = self.should_collect_scoped_data(&raw_event);
+
         if ENTITIES_FIRST_EVENTS.contains(&event_desc.name()) {
-            let event = GameEvent::new(event_desc.name().to_string(), event_fields, self.tick);
+            let event = GameEvent::new(event_name, event_fields, self.tick);
             return Ok(Some(event));
         } else {
-            // Add extra fields
-            event_fields.extend(self.find_extra(&event_fields)?);
+            if should_collect_scoped_data {
+                event_fields.extend(self.find_extra(&event_fields)?);
+            }
             // Remove fields that user does nothing with like userid and user_pawn
             event_fields.retain(|ref x| !INTERNALEVENTFIELDS.contains(&x.name.as_str()));
-            let mut event = GameEvent::new(event_desc.name().to_string(), event_fields, self.tick);
+            let mut event = GameEvent::new(event_name, event_fields, self.tick);
             self.cleanups(&mut event);
             self.push_scoped_game_event(event);
         }
@@ -170,6 +197,51 @@ impl<'a> SecondPassParser<'a> {
         Ok(())
     }
 
+    fn event_field_value(event: &GameEvent, field_name: &str) -> Option<Variant> {
+        match field_name {
+            "event_name" => Some(Variant::String(event.name.clone())),
+            "tick" => Some(Variant::I32(event.tick)),
+            _ => event
+                .fields
+                .iter()
+                .find(|field| field.name == field_name)
+                .and_then(|field| field.data.clone()),
+        }
+    }
+
+    fn resolve_tick_filter_value(event: &GameEvent, value: &TickFilterValue) -> Option<Variant> {
+        match value {
+            TickFilterValue::Value(value) => Some(value.clone()),
+            TickFilterValue::Field(field_name) => Self::event_field_value(event, field_name),
+        }
+    }
+
+    fn event_matches_tick_filter(event: &GameEvent, tick_filter: &[TickFilterClause]) -> bool {
+        tick_filter.iter().all(|clause| {
+            let Some(left) = Self::event_field_value(event, &clause.field) else {
+                return false;
+            };
+            match clause.op {
+                TickFilterOp::Eq => clause
+                    .value
+                    .as_ref()
+                    .and_then(|value| Self::resolve_tick_filter_value(event, value))
+                    == Some(left),
+                TickFilterOp::Neq => clause
+                    .value
+                    .as_ref()
+                    .and_then(|value| Self::resolve_tick_filter_value(event, value))
+                    .map(|value| value != left)
+                    .unwrap_or(false),
+                TickFilterOp::In => clause
+                    .values
+                    .iter()
+                    .filter_map(|value| Self::resolve_tick_filter_value(event, value))
+                    .any(|value| value == left),
+            }
+        })
+    }
+
     fn event_matches_scoped_spec(event: &GameEvent, spec: &ScopedEventSpec) -> bool {
         if spec.event != event.name {
             return false;
@@ -191,6 +263,24 @@ impl<'a> SecondPassParser<'a> {
             .iter()
             .filter(|spec| Self::event_matches_scoped_spec(event, spec))
             .collect()
+    }
+
+    fn matching_scoped_specs_for_additional_data<'b>(&'b self, event: &GameEvent) -> Vec<&'b ScopedEventSpec> {
+        self.scoped_event_specs
+            .iter()
+            .filter(|spec| {
+                spec.event == event.name
+                    && (!spec.player_props.is_empty() || !spec.other_props.is_empty() || spec.include_all_players)
+                    && Self::event_matches_tick_filter(event, &spec.tick_filter)
+            })
+            .collect()
+    }
+
+    fn should_collect_scoped_data(&self, event: &GameEvent) -> bool {
+        if self.scoped_event_specs.is_empty() {
+            return true;
+        }
+        !self.matching_scoped_specs_for_additional_data(event).is_empty()
     }
 
     fn build_all_players_snapshot(
@@ -238,7 +328,11 @@ impl<'a> SecondPassParser<'a> {
     }
 
     fn push_scoped_game_event(&mut self, mut event: GameEvent) {
-        let matching_specs = self.matching_scoped_specs(&event);
+        let matching_specs: Vec<&ScopedEventSpec> = self
+            .matching_scoped_specs(&event)
+            .into_iter()
+            .filter(|spec| Self::event_matches_tick_filter(&event, &spec.tick_filter))
+            .collect();
         if !matching_specs.is_empty() {
             event.all_players = self.build_all_players_snapshot(&matching_specs);
         }

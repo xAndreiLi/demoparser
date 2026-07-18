@@ -15,7 +15,13 @@ use parser::parse_demo::DemoOutput;
 use parser::parse_demo::Parser;
 use parser::first_pass::prop_controller::PropInfo;
 use parser::second_pass::collect_data::PropType;
-use parser::second_pass::game_events::{GameEvent, ScopedEventSpec};
+use parser::second_pass::game_events::{
+  GameEvent,
+  ScopedEventSpec,
+  TickFilterClause,
+  TickFilterOp,
+  TickFilterValue,
+};
 use parser::second_pass::parser_settings::huffman_lookup_table;
 use parser::second_pass::variants::soa_to_aos;
 use parser::second_pass::variants::BytesVariant;
@@ -125,6 +131,74 @@ pub struct ParsedWantedPropState {
   pub state: ParsedJsVariant,
 }
 
+pub struct ParsedTickFilterValue(pub TickFilterValue);
+
+impl FromNapiValue for ParsedTickFilterValue {
+  unsafe fn from_napi_value(env: sys::napi_env, napi_val: sys::napi_value) -> napi::Result<Self> {
+    let js_unknown = Unknown::from_napi_value(env, napi_val)?;
+
+    if js_unknown.get_type()? == ValueType::Object {
+      let obj: Object = Object::from_napi_value(env, napi_val)?;
+      if obj.has_named_property("field")? {
+        let field: String = obj.get_named_property("field")?;
+        return Ok(ParsedTickFilterValue(TickFilterValue::Field(field)));
+      }
+    }
+
+    let parsed_variant = ParsedJsVariant::from_napi_value(env, napi_val)?;
+    Ok(ParsedTickFilterValue(TickFilterValue::Value(parsed_variant.0)))
+  }
+}
+
+pub struct ParsedTickFilterClause(pub TickFilterClause);
+
+impl FromNapiValue for ParsedTickFilterClause {
+  unsafe fn from_napi_value(env: sys::napi_env, napi_val: sys::napi_value) -> napi::Result<Self> {
+    let obj: Object = Object::from_napi_value(env, napi_val)?;
+    let field: String = obj.get_named_property("field")?;
+    let op_raw: String = obj.get_named_property("op")?;
+    let op = match op_raw.as_str() {
+      "eq" => TickFilterOp::Eq,
+      "neq" => TickFilterOp::Neq,
+      "in" => TickFilterOp::In,
+      _ => {
+        return Err(Error::new(
+          Status::InvalidArg,
+          format!("Unsupported tickFilter op: {}", op_raw),
+        ))
+      }
+    };
+
+    let value = if obj.has_named_property("value")? {
+      Some(obj.get_named_property_unchecked::<ParsedTickFilterValue>("value")?.0)
+    } else {
+      None
+    };
+
+    let mut values = if obj.has_named_property("values")? {
+      obj.get_named_property::<Vec<ParsedTickFilterValue>>("values")?
+        .into_iter()
+        .map(|value| value.0)
+        .collect()
+    } else {
+      vec![]
+    };
+
+    if values.is_empty() {
+      if let Some(value) = &value {
+        values.push(value.clone());
+      }
+    }
+
+    Ok(ParsedTickFilterClause(TickFilterClause {
+      field,
+      op,
+      value,
+      values,
+    }))
+  }
+}
+
 #[derive(Clone)]
 pub struct ParsedScopedEventSpec {
   pub event: String,
@@ -132,6 +206,7 @@ pub struct ParsedScopedEventSpec {
   pub other_props: Vec<String>,
   pub where_clause: HashMap<String, Variant>,
   pub include_all_players: bool,
+  pub tick_filter: Vec<TickFilterClause>,
 }
 
 impl FromNapiValue for ParsedScopedEventSpec {
@@ -166,6 +241,14 @@ impl FromNapiValue for ParsedScopedEventSpec {
     } else {
       false
     };
+    let tick_filter = if obj.has_named_property("tickFilter")? {
+      match obj.get_named_property_unchecked::<Vec<ParsedTickFilterClause>>("tickFilter") {
+        Ok(filters) => filters.into_iter().map(|filter| filter.0).collect(),
+        Err(_) => vec![obj.get_named_property_unchecked::<ParsedTickFilterClause>("tickFilter")?.0],
+      }
+    } else {
+      vec![]
+    };
 
     Ok(ParsedScopedEventSpec {
       event,
@@ -173,6 +256,7 @@ impl FromNapiValue for ParsedScopedEventSpec {
       other_props,
       where_clause,
       include_all_players,
+      tick_filter,
     })
   }
 }
@@ -182,6 +266,51 @@ fn matching_scoped_specs<'a>(event: &GameEvent, scoped_specs: &'a [ScopedEventSp
     .iter()
     .filter(|spec| spec.event == event.name && event_matches_where_clause(event, &spec.where_clause))
     .collect()
+}
+
+fn event_field_value(event: &GameEvent, field_name: &str) -> Option<Variant> {
+  match field_name {
+    "event_name" => Some(Variant::String(event.name.clone())),
+    "tick" => Some(Variant::I32(event.tick)),
+    _ => event
+      .fields
+      .iter()
+      .find(|field| field.name == *field_name)
+      .and_then(|field| field.data.clone()),
+  }
+}
+
+fn resolve_tick_filter_value(event: &GameEvent, value: &TickFilterValue) -> Option<Variant> {
+  match value {
+    TickFilterValue::Value(value) => Some(value.clone()),
+    TickFilterValue::Field(field_name) => event_field_value(event, field_name),
+  }
+}
+
+fn event_matches_tick_filter(event: &GameEvent, tick_filter: &[TickFilterClause]) -> bool {
+  tick_filter.iter().all(|clause| {
+    let Some(left) = event_field_value(event, &clause.field) else {
+      return false;
+    };
+    match clause.op {
+      TickFilterOp::Eq => clause
+        .value
+        .as_ref()
+        .and_then(|value| resolve_tick_filter_value(event, value))
+        == Some(left),
+      TickFilterOp::Neq => clause
+        .value
+        .as_ref()
+        .and_then(|value| resolve_tick_filter_value(event, value))
+        .map(|value| value != left)
+        .unwrap_or(false),
+      TickFilterOp::In => clause
+        .values
+        .iter()
+        .filter_map(|value| resolve_tick_filter_value(event, value))
+        .any(|value| value == left),
+    }
+  })
 }
 
 fn event_matches_where_clause(event: &GameEvent, where_clause: &AHashMap<String, Variant>) -> bool {
@@ -296,6 +425,9 @@ fn filter_scoped_events(
 
       let mut allowed_field_names: HashMap<String, (), RandomState> = HashMap::default();
       for spec in matching_specs {
+        if !event_matches_tick_filter(&event, &spec.tick_filter) {
+          continue;
+        }
         allowed_field_names.extend(scoped_allowed_field_names(spec, &prop_infos_by_name));
       }
 
@@ -702,6 +834,7 @@ pub fn parse_events_scoped(
       other_props: real_other_props,
       where_clause: scoped_event.where_clause.into_iter().collect(),
       include_all_players: scoped_event.include_all_players,
+      tick_filter: scoped_event.tick_filter,
     });
   }
 

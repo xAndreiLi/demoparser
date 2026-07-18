@@ -64,6 +64,28 @@ test('parse_events_scoped_include_all_players_adds_nested_player_snapshots', () 
     expect(Object.prototype.hasOwnProperty.call(firstPlayer, 'X')).toBe(true);
     expect(Object.prototype.hasOwnProperty.call(firstPlayer, 'Y')).toBe(false);
 });
+test('parse_events_scoped_tick_filter_static_value_gates_additional_props_only', () => {
+    const allHurts = parseEventsScoped(scopedFilePath, [
+        { event: "player_hurt", playerProps: ["X"] },
+    ]);
+    const filteredHurts = parseEventsScoped(scopedFilePath, [
+        { event: "player_hurt", playerProps: ["X"], tickFilter: { field: "weapon", op: "eq", value: "glock" } },
+    ]);
+
+    expect(filteredHurts.length).toBe(allHurts.length);
+    const withScopedProp = filteredHurts.filter((event) => Object.prototype.hasOwnProperty.call(event, 'user_X'));
+    const withoutScopedProp = filteredHurts.filter((event) => !Object.prototype.hasOwnProperty.call(event, 'user_X'));
+    expect(withScopedProp.length).toBeGreaterThan(0);
+    expect(withoutScopedProp.length).toBeGreaterThan(0);
+});
+test('parse_events_scoped_tick_filter_supports_field_to_field_comparison', () => {
+    const filteredHurts = parseEventsScoped(scopedFilePath, [
+        { event: "player_hurt", playerProps: ["X"], tickFilter: { field: "weapon", op: "neq", value: { field: "weapon" } } },
+    ]);
+
+    expect(filteredHurts.length).toBeGreaterThan(0);
+    expect(filteredHurts.every((event) => !Object.prototype.hasOwnProperty.call(event, 'user_X'))).toBe(true);
+});
 test('list_game_events', () => {
     let correct_events = JSON.stringify(JSON.parse(fs.readFileSync("tests/data/list_game_events.json")));
     let events_arr = listGameEvents(filePath);

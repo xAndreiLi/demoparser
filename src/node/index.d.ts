@@ -3,6 +3,28 @@
 export type JsVariant =
   boolean | string | number | bigint
 
+export interface ScopedEventFieldRef {
+  field: string
+}
+
+export type ScopedEventFilterValue = JsVariant | ScopedEventFieldRef
+
+export interface ScopedEventTickFilter {
+  field: string
+  op: 'eq' | 'neq' | 'in'
+  value?: ScopedEventFilterValue
+  values?: Array<ScopedEventFilterValue>
+}
+
+export interface ScopedEventSpec {
+  event: string
+  playerProps?: Array<string>
+  otherProps?: Array<string>
+  where?: Record<string, JsVariant>
+  includeAllPlayers?: boolean
+  tickFilter?: ScopedEventTickFilter | Array<ScopedEventTickFilter>
+}
+
 export declare function listGameEvents(pathOrBuf: string | Buffer): any
 
 export declare function listUpdatedFields(pathOrBuf: string | Buffer): any
