@@ -592,6 +592,7 @@ module.exports.listUpdatedFields = nativeBinding.listUpdatedFields
 module.exports.parseEvent = nativeBinding.parseEvent
 module.exports.parseEvents = nativeBinding.parseEvents
 module.exports.parseEventsScoped = nativeBinding.parseEventsScoped
+module.exports.parseEventsScopedWithTracks = nativeBinding.parseEventsScopedWithTracks
 module.exports.parseGrenades = nativeBinding.parseGrenades
 module.exports.parseHeader = nativeBinding.parseHeader
 module.exports.parsePlayerInfo = nativeBinding.parsePlayerInfo

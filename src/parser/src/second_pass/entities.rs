@@ -111,6 +111,7 @@ impl<'a> SecondPassParser<'a> {
         events_to_emit: &mut Vec<GameEventInfo>,
         is_fullpacket: bool,
     ) -> Result<(), DemoParserError> {
+        let _pc = crate::second_pass::parser::prof_cls_on().then(std::time::Instant::now);
         let _pp = crate::second_pass::parser::prof_on().then(std::time::Instant::now);
         let n_updates = self.parse_paths(bitreader)?;
         if let Some(t) = _pp {
@@ -123,6 +124,18 @@ impl<'a> SecondPassParser<'a> {
         }
         if n_updated_values > 0 {
             self.gather_extra_info(&entity_id, is_baseline)?;
+        }
+        if let Some(t) = _pc {
+            if let Some(Some(e)) = self.entities.get(entity_id as usize) {
+                let cls_id = e.cls_id;
+                let ns = t.elapsed().as_nanos() as u64;
+                crate::second_pass::parser::PROF_CLS.with(|m| {
+                    let mut m = m.borrow_mut();
+                    let e = m.entry(cls_id).or_insert((0, 0));
+                    e.0 += ns;
+                    e.1 += 1;
+                });
+            }
         }
         Ok(())
     }

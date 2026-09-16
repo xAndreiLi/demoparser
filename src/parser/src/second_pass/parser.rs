@@ -46,7 +46,27 @@ thread_local! {
     static PROF_COLLECT_NS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     pub(crate) static PROF_PATHS_NS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     pub(crate) static PROF_DECODE_NS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    pub(crate) static PROF_SAMPLE_NS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
+// Process-wide totals (summed CPU ns across all second-pass segments/threads).
+pub static PROF_TOT_ENTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static PROF_TOT_COLLECT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static PROF_TOT_PATHS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static PROF_TOT_DECODE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static PROF_TOT_SAMPLE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static PROF_TOT_SEGMENTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static PROF_TOT_SAMPLE_ROWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[inline]
+pub(crate) fn prof_cls_on() -> bool {
+    static P: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *P.get_or_init(|| std::env::var("CS2_PROF_CLS").is_ok())
+}
+thread_local! {
+    /// cls_id -> (ns in update_entity, n updates)
+    pub(crate) static PROF_CLS: std::cell::RefCell<AHashMap<u32, (u64, u64)>> = std::cell::RefCell::new(AHashMap::default());
+}
+/// class name -> (ns, n updates), summed over all segments
+pub static PROF_CLS_TOTAL: std::sync::Mutex<Option<AHashMap<String, (u64, u64)>>> = std::sync::Mutex::new(None);
 
 #[derive(Debug)]
 pub struct SecondPassOutput {
@@ -71,6 +91,7 @@ pub struct SecondPassOutput {
     pub df_per_player: AHashMap<u64, AHashMap<u32, PropColumn>>,
     pub entities: Vec<Option<Entity>>,
     pub last_tick: i32,
+    pub track_cols: crate::second_pass::game_events::TrackColumns,
 }
 impl<'a> SecondPassParser<'a> {
     pub fn start(&mut self, demo_bytes: &'a [u8]) -> Result<(), DemoParserError> {
@@ -79,6 +100,7 @@ impl<'a> SecondPassParser<'a> {
             PROF_COLLECT_NS.with(|c| c.set(0));
             PROF_PATHS_NS.with(|c| c.set(0));
             PROF_DECODE_NS.with(|c| c.set(0));
+            PROF_SAMPLE_NS.with(|c| c.set(0));
         }
         let started_at = self.ptr;
         // re-use these to avoid allocation
@@ -125,20 +147,25 @@ impl<'a> SecondPassParser<'a> {
             ok?;
         }
         if prof_on() {
-            let ents = PROF_ENTS_NS.with(|c| c.get());
-            let coll = PROF_COLLECT_NS.with(|c| c.get());
-            let paths = PROF_PATHS_NS.with(|c| c.get());
-            let dec = PROF_DECODE_NS.with(|c| c.get());
-            eprintln!(
-                "[prof] parse_packet_ents: {:.3}s | collect_*: {:.3}s",
-                ents as f64 / 1e9,
-                coll as f64 / 1e9
-            );
-            eprintln!(
-                "[prof]   within ents: parse_paths {:.3}s | decode_entity_update {:.3}s",
-                paths as f64 / 1e9,
-                dec as f64 / 1e9
-            );
+            use std::sync::atomic::Ordering::Relaxed;
+            PROF_TOT_ENTS.fetch_add(PROF_ENTS_NS.with(|c| c.get()), Relaxed);
+            PROF_TOT_COLLECT.fetch_add(PROF_COLLECT_NS.with(|c| c.get()), Relaxed);
+            PROF_TOT_PATHS.fetch_add(PROF_PATHS_NS.with(|c| c.get()), Relaxed);
+            PROF_TOT_DECODE.fetch_add(PROF_DECODE_NS.with(|c| c.get()), Relaxed);
+            PROF_TOT_SAMPLE.fetch_add(PROF_SAMPLE_NS.with(|c| c.get()), Relaxed);
+            PROF_TOT_SEGMENTS.fetch_add(1, Relaxed);
+            PROF_TOT_SAMPLE_ROWS.fetch_add(self.game_events.iter().filter(|e| e.name == "tick_sample").count() as u64, Relaxed);
+        }
+        if prof_cls_on() {
+            let local = PROF_CLS.with(|m| std::mem::take(&mut *m.borrow_mut()));
+            let mut g = PROF_CLS_TOTAL.lock().unwrap();
+            let g = g.get_or_insert_with(AHashMap::default);
+            for (cls_id, (ns, n)) in local {
+                let name = self.cls_by_id.get(cls_id as usize).map(|c| c.name.clone()).unwrap_or_else(|| format!("cls{}", cls_id));
+                let e = g.entry(name).or_insert((0, 0));
+                e.0 += ns;
+                e.1 += n;
+            }
         }
         Ok(())
     }
@@ -252,7 +279,9 @@ impl<'a> SecondPassParser<'a> {
                             let _ct = prof_on().then(std::time::Instant::now);
                             self.collect_entities();
                             if let Some(t) = _ct { PROF_COLLECT_NS.with(|c| c.set(c.get() + t.elapsed().as_nanos() as u64)); }
+                            let _st = prof_on().then(std::time::Instant::now);
                             self.create_custom_event_tick_sample()?;
+                            if let Some(t) = _st { PROF_SAMPLE_NS.with(|c| c.set(c.get() + t.elapsed().as_nanos() as u64)); }
                         }
                     }
                     Ok(())

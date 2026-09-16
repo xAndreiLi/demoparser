@@ -1,5 +1,5 @@
 
-var { parseEvent, parseEvents, parseEventsScoped, parseTicks, parsePlayerInfo, parseGrenades, listGameEvents, parseHeader } = require('../index');
+var { parseEvent, parseEvents, parseEventsScoped, parseEventsScopedWithTracks, parseTicks, parsePlayerInfo, parseGrenades, listGameEvents, parseHeader } = require('../index');
 const fs = require('fs');
 
 
@@ -122,6 +122,85 @@ test('parse_events_scoped_tick_sample_leaves_other_rows_byte_identical', () => {
     expect(withCadence.some((event) => event.event_name === "tick_sample")).toBe(true);
     expect(JSON.stringify(otherRows)).toBe(JSON.stringify(withoutCadence));
 });
+test('parse_events_scoped_with_tracks_returns_typed_array_sidecar_and_no_tick_sample_rows', () => {
+    const step = 8;
+    const playerProps = ["X", "Y", "Z", "yaw", "is_alive", "team_num"];
+    const specs = [
+        { event: "player_death", playerProps: ["X"] },
+        { event: "tick_sample", sampleEveryTicks: step, playerProps },
+    ];
+    const { events, tracks } = parseEventsScopedWithTracks(scopedFilePath, specs);
+
+    expect(Array.isArray(events)).toBe(true);
+    expect(events.some((event) => event.event_name === "tick_sample")).toBe(false);
+    expect(events.some((event) => event.event_name === "player_death")).toBe(true);
+
+    // Typed arrays come from the addon's realm; compare by tag rather than instanceof.
+    const tag = (value) => Object.prototype.toString.call(value);
+    expect(tag(tracks.tick)).toBe("[object Int32Array]");
+    expect(tag(tracks.steamid)).toBe("[object BigUint64Array]");
+    expect(tag(tracks.x)).toBe("[object Float32Array]");
+    expect(tag(tracks.y)).toBe("[object Float32Array]");
+    expect(tag(tracks.z)).toBe("[object Float32Array]");
+    expect(tag(tracks.yaw)).toBe("[object Float32Array]");
+    expect(tag(tracks.isAlive)).toBe("[object Uint8Array]");
+    expect(tag(tracks.teamNum)).toBe("[object Uint8Array]");
+    const n = tracks.tick.length;
+    expect(n).toBeGreaterThan(0);
+    for (const column of [tracks.steamid, tracks.x, tracks.y, tracks.z, tracks.yaw, tracks.isAlive, tracks.teamNum]) {
+        expect(column.length).toBe(n);
+    }
+    for (let i = 0; i < n; i++) {
+        expect(tracks.tick[i] % step).toBe(0);
+        if (i > 0) expect(tracks.tick[i]).toBeGreaterThanOrEqual(tracks.tick[i - 1]);
+    }
+});
+
+test('parse_events_scoped_with_tracks_matches_all_players_snapshots', () => {
+    const step = 8;
+    const playerProps = ["X", "Y", "Z", "yaw", "is_alive", "team_num"];
+    const specs = [{ event: "tick_sample", sampleEveryTicks: step, playerProps }];
+    const eventRows = parseEventsScoped(scopedFilePath, specs).filter((event) => event.event_name === "tick_sample");
+    const { tracks } = parseEventsScopedWithTracks(scopedFilePath, specs);
+
+    const expected = new Map();
+    for (const row of eventRows) {
+        for (const [steamid, snap] of Object.entries(row.all_players)) {
+            expected.set(`${row.tick}:${steamid}`, snap);
+        }
+    }
+    expect(tracks.tick.length).toBe(expected.size);
+    for (let i = 0; i < tracks.tick.length; i++) {
+        const snap = expected.get(`${tracks.tick[i]}:${tracks.steamid[i].toString()}`);
+        expect(snap).toBeDefined();
+        // A null snapshot value (prop absent on the entity) is NaN / 255 in the sidecar.
+        const expectFloat = (actual, value) => {
+            if (value === null || value === undefined) expect(Number.isNaN(actual)).toBe(true);
+            else expect(actual).toBeCloseTo(value, 3);
+        };
+        expectFloat(tracks.x[i], snap.X);
+        expectFloat(tracks.y[i], snap.Y);
+        expectFloat(tracks.z[i], snap.Z);
+        expectFloat(tracks.yaw[i], snap.yaw);
+        expect(tracks.isAlive[i]).toBe(snap.is_alive === null || snap.is_alive === undefined ? 255 : (snap.is_alive ? 1 : 0));
+        expect(tracks.teamNum[i]).toBe(snap.team_num === null || snap.team_num === undefined ? 255 : snap.team_num);
+    }
+});
+
+test('parse_events_scoped_with_tracks_adds_pose_props_when_spec_omits_them', () => {
+    const { tracks } = parseEventsScopedWithTracks(scopedFilePath, [
+        { event: "tick_sample", sampleEveryTicks: 64 },
+    ]);
+    expect(tracks.tick.length).toBeGreaterThan(0);
+    const finite = Array.from(tracks.x).filter((value) => Number.isFinite(value)).length;
+    expect(finite).toBeGreaterThan(0);
+});
+
+test('parse_events_scoped_with_tracks_requires_one_tick_sample_spec', () => {
+    expect(() => parseEventsScopedWithTracks(scopedFilePath, [{ event: "player_death" }])).toThrow(/tick_sample/);
+    expect(() => parseEventsScopedWithTracks(scopedFilePath, [{ event: "tick_sample" }])).toThrow(/sampleEveryTicks/);
+});
+
 test('list_game_events', () => {
     let correct_events = JSON.stringify(JSON.parse(fs.readFileSync("tests/data/list_game_events.json")));
     let events_arr = listGameEvents(filePath);

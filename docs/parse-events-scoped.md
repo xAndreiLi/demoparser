@@ -296,6 +296,46 @@ Behavior:
 
 The CPU win versus `parseTicks` is that cadence snapshots share the one `parseEventsScoped` second pass.
 
+### Sidecar: `parseEventsScopedWithTracks`
+
+At 8 Hz with every connected player, `tick_sample` produces 10k–25k rows per demo, each carrying a
+nested `all_players` map. Building those rows, serialising them with `serde_json`, and converting
+the resulting `Value` to JS objects roughly doubles the wall time of the scoped call, while the
+entity decode itself is unchanged (it always applies every packet; cadence only gates readout).
+
+`parseEventsScopedWithTracks` runs the same single pass but reads the cadence out as flat columns:
+
+```ts
+const { events, tracks } = parseEventsScopedWithTracks(path, [
+  { event: 'player_death', playerProps: ['X', 'Y'] },
+  { event: 'tick_sample', sampleEveryTicks: 8 },
+])
+
+// events: identical to parseEventsScoped(...) minus the tick_sample rows
+// tracks: struct of typed arrays, one row per (tick, connected player), grouped by ascending tick
+tracks.tick     // Int32Array
+tracks.steamid  // BigUint64Array  (String(tracks.steamid[i]) for a steam64 string)
+tracks.x, tracks.y, tracks.z, tracks.yaw  // Float32Array, NaN when missing
+tracks.isAlive  // Uint8Array, 0/1, 255 when missing
+tracks.teamNum  // Uint8Array, 255 when missing
+```
+
+Rules:
+
+- exactly one `tick_sample` spec with `sampleEveryTicks > 0` is required (the call throws otherwise)
+- the sidecar schema is fixed (`X Y Z yaw is_alive team_num`); those props are added to the parse
+  automatically, so the `tick_sample` spec's `playerProps` may be omitted
+- no `tick_sample` rows are emitted; `all_players` on other events is unaffected
+- multithreaded segments are concatenated in file order; a tick sampled on both sides of a
+  fullpacket boundary is kept once
+
+Measured on five 170–440 MB demos (WSL2, 20 threads, median of 3): the plain scoped call with
+`tick_sample` at 8 Hz was 1.7–1.9× the same specs without `tick_sample`; with the sidecar it was
+0.98–1.08×, with identical positions.
+
+Core: `TrackColumns` / `collect_track_sample` in `second_pass/game_events.rs`, enabled through
+`Parser::with_track_sidecar(true)`.
+
 ## Practical guidance
 
 Use `parseEventsScoped` when:

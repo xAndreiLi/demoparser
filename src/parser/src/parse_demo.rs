@@ -75,6 +75,7 @@ pub struct DemoOutput {
     pub voice_data: Vec<(i32, CsvcMsgVoiceData)>,
     pub prop_controller: PropController,
     pub df_per_player: AHashMap<u64, AHashMap<u32, PropColumn>>,
+    pub track_cols: crate::second_pass::game_events::TrackColumns,
 }
 
 pub struct Parser<'a> {
@@ -84,6 +85,8 @@ pub struct Parser<'a> {
     /// Used as the cache key for the first-pass structure cache.
     pub file_path: Option<String>,
     pub scoped_event_specs: Arc<Vec<ScopedEventSpec>>,
+    /// Route `tick_sample` cadence into `DemoOutput::track_cols` instead of game events.
+    pub track_sidecar: bool,
 }
 #[derive(PartialEq)]
 pub enum ParsingMode {
@@ -99,7 +102,16 @@ impl<'a> Parser<'a> {
             parsing_mode: parsing_mode,
             file_path: None,
             scoped_event_specs: Arc::new(vec![]),
+            track_sidecar: false,
         }
+    }
+
+    /// Builder method: read `tick_sample` cadence ticks out as flat `TrackColumns`
+    /// (`DemoOutput::track_cols`) instead of `tick_sample` game events. Requires a
+    /// `tick_sample` scoped spec with `sample_every_ticks` to define the cadence.
+    pub fn with_track_sidecar(mut self, enabled: bool) -> Self {
+        self.track_sidecar = enabled;
+        self
     }
 
     /// Builder method: attach the source file path so the parser can cache and
@@ -152,15 +164,45 @@ impl<'a> Parser<'a> {
         if _prof {
             eprintln!("[prof] first_pass: {:.3}s", _t.elapsed().as_secs_f64());
         }
-        if self.parsing_mode == ParsingMode::Normal
+        let use_mt = self.parsing_mode == ParsingMode::Normal
             && check_multithreadability(&self.input.wanted_player_props)
             && !(self.parsing_mode == ParsingMode::ForceSingleThreaded)
-            || self.parsing_mode == ParsingMode::ForceMultiThreaded
-        {
-            return self.second_pass_multi_threaded(demo_bytes, first_pass_output);
+            || self.parsing_mode == ParsingMode::ForceMultiThreaded;
+        let n_segments = first_pass_output.fullpacket_offsets.len();
+        let _t2 = std::time::Instant::now();
+        let out = if use_mt {
+            self.second_pass_multi_threaded(demo_bytes, first_pass_output)
         } else {
             self.second_pass_single_threaded(demo_bytes, first_pass_output)
+        };
+        if _prof {
+            use crate::second_pass::parser::*;
+            use std::sync::atomic::Ordering::Relaxed;
+            let ns = |a: &std::sync::atomic::AtomicU64| a.swap(0, Relaxed) as f64 / 1e9;
+            let (ents, coll, paths, dec, samp) = (ns(&PROF_TOT_ENTS), ns(&PROF_TOT_COLLECT), ns(&PROF_TOT_PATHS), ns(&PROF_TOT_DECODE), ns(&PROF_TOT_SAMPLE));
+            let segs = PROF_TOT_SEGMENTS.swap(0, Relaxed);
+            let rows = PROF_TOT_SAMPLE_ROWS.swap(0, Relaxed);
+            eprintln!(
+                "[prof] second_pass wall {:.3}s (mt={} segments={} fullpackets={}) | CPU sums: parse_packet_ents {:.3}s (paths {:.3}s, decode {:.3}s) | collect_entities {:.3}s | tick_sample+snapshot {:.3}s ({} rows)",
+                _t2.elapsed().as_secs_f64(), use_mt, segs, n_segments, ents, paths, dec, coll, samp, rows
+            );
+            if let Some(map) = PROF_CLS_TOTAL.lock().unwrap().take() {
+                let total_ns: u64 = map.values().map(|v| v.0).sum();
+                let total_n: u64 = map.values().map(|v| v.1).sum();
+                let mut v: Vec<(String, (u64, u64))> = map.into_iter().collect();
+                v.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+                eprintln!("[prof-cls] update_entity CPU total {:.3}s over {} entity updates ({} classes)", total_ns as f64 / 1e9, total_n, v.len());
+                let mut player_ns = 0u64;
+                for (name, (ns, n)) in v.iter().take(25) {
+                    eprintln!("[prof-cls]   {:>6.1}%  {:>7.3}s  {:>9} upd  {}", *ns as f64 / total_ns as f64 * 100.0, *ns as f64 / 1e9, n, name);
+                }
+                for (name, (ns, _)) in &v {
+                    if name == "CCSPlayerPawn" || name == "CCSPlayerController" { player_ns += ns; }
+                }
+                eprintln!("[prof-cls] CCSPlayerPawn + CCSPlayerController = {:.1}% of update_entity CPU", player_ns as f64 / total_ns as f64 * 100.0);
+            }
         }
+        out
     }
 
     fn second_pass_multi_threaded(&self, outer_bytes: &[u8], first_pass_output: FirstPassOutput) -> Result<DemoOutput, DemoParserError> {
@@ -174,6 +216,7 @@ impl<'a> Parser<'a> {
                     false,
                     None,
                     Arc::clone(&self.scoped_event_specs),
+                    self.track_sidecar,
                 )?;
                 parser.start(outer_bytes)?;
                 Ok(parser.create_output())
@@ -235,6 +278,7 @@ impl<'a> Parser<'a> {
             true,
             None,
             Arc::clone(&self.scoped_event_specs),
+            self.track_sidecar,
         )?;
         parser.start(outer_bytes)?;
         if prof { eprintln!("[prof] second_pass start(): {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
@@ -271,6 +315,7 @@ impl<'a> Parser<'a> {
                     }
                     let my_first_out = first_pass_output.clone();
                     let scoped_event_specs = Arc::clone(&self.scoped_event_specs);
+                    let track_sidecar = self.track_sidecar;
                     handles.push(s.spawn(move || {
                         let mut parser = SecondPassParser::new(
                             my_first_out,
@@ -278,6 +323,7 @@ impl<'a> Parser<'a> {
                             false,
                             Some(start_end_offset),
                             scoped_event_specs,
+                            track_sidecar,
                         )?;
                         parser.start(outer_bytes)?;
                         Ok(parser.create_output())
@@ -323,6 +369,7 @@ impl<'a> Parser<'a> {
                     false,
                     None,
                     Arc::clone(&self.scoped_event_specs),
+                    self.track_sidecar,
                 )?;
                 parser.start(outer_bytes)?;
                 Ok(parser.create_output())
@@ -469,6 +516,7 @@ impl<'a> Parser<'a> {
                 voice_data: output.voice_data,
                 df_per_player: pp,
                 uniq_prop_names: all_prop_names,
+                track_cols: output.track_cols,
             };
         }
 
@@ -485,6 +533,7 @@ impl<'a> Parser<'a> {
         let mut convars = AHashMap::default();
         let mut projectiles = Vec::new();
         let mut voice_data = Vec::new();
+        let mut track_cols = crate::second_pass::game_events::TrackColumns::default();
 
         for output in outputs {
             dfs.push(output.df);
@@ -510,6 +559,7 @@ impl<'a> Parser<'a> {
             convars.extend(output.convars);
             projectiles.extend(output.projectiles);
             voice_data.extend(output.voice_data);
+            track_cols.extend_dedup(output.track_cols);
         }
 
         Parser::dedupe_tick_sample_events(&mut game_events);
@@ -547,6 +597,7 @@ impl<'a> Parser<'a> {
             voice_data,
             df_per_player: pp,
             uniq_prop_names: all_prop_names,
+            track_cols,
         }
     }
 

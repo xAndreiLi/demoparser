@@ -41,6 +41,81 @@ use crate::second_pass::entities::EntityType;
 use crate::first_pass::prop_controller::FLATTENED_VEC_MAX_LEN;
 use crate::first_pass::prop_controller::ITEM_PURCHASE_HANDLE;
 
+/// Player props read out into the `tick_sample` sidecar (`TrackColumns`), in column order.
+/// Friendly names; resolve with `rm_user_friendly_names` before matching `PropInfo::prop_name`.
+pub const TRACK_SIDECAR_PLAYER_PROPS: [&str; 6] = ["X", "Y", "Z", "yaw", "is_alive", "team_num"];
+
+/// Resolves `TRACK_SIDECAR_PLAYER_PROPS` against the prop controller. A `None` entry means the
+/// prop was not requested for this parse; its column is filled with the missing sentinel.
+pub fn resolve_track_prop_infos(prop_controller: &PropController) -> Vec<Option<PropInfo>> {
+    let wanted: Vec<String> = TRACK_SIDECAR_PLAYER_PROPS.iter().map(|s| s.to_string()).collect();
+    let real = crate::first_pass::parser_settings::rm_user_friendly_names(&wanted).unwrap_or(wanted);
+    real.iter()
+        .map(|name| {
+            prop_controller
+                .prop_infos
+                .iter()
+                .find(|p| p.is_player_prop && p.prop_name == *name)
+                .cloned()
+        })
+        .collect()
+}
+
+/// Flat per-sample readout of the `tick_sample` cadence: one row per (tick, connected player),
+/// rows grouped by tick in ascending order. This is the cheap alternative to emitting a
+/// `GameEvent` with a nested `all_players` map per sample tick.
+///
+/// Missing values: `f32::NAN` for the float columns, `u8::MAX` for `is_alive` / `team_num`.
+#[derive(Debug, Default, Clone)]
+pub struct TrackColumns {
+    pub tick: Vec<i32>,
+    pub steamid: Vec<u64>,
+    pub x: Vec<f32>,
+    pub y: Vec<f32>,
+    pub z: Vec<f32>,
+    pub yaw: Vec<f32>,
+    pub is_alive: Vec<u8>,
+    pub team_num: Vec<u8>,
+}
+impl TrackColumns {
+    pub fn len(&self) -> usize { self.tick.len() }
+    /// Append `other` (a later segment, in ptr order). Rows at or before our last tick are
+    /// duplicates from the segment boundary and are dropped.
+    pub fn extend_dedup(&mut self, other: TrackColumns) {
+        let start = match self.tick.last() {
+            Some(&last) => other.tick.iter().position(|t| *t > last).unwrap_or(other.tick.len()),
+            None => 0,
+        };
+        self.tick.extend_from_slice(&other.tick[start..]);
+        self.steamid.extend_from_slice(&other.steamid[start..]);
+        self.x.extend_from_slice(&other.x[start..]);
+        self.y.extend_from_slice(&other.y[start..]);
+        self.z.extend_from_slice(&other.z[start..]);
+        self.yaw.extend_from_slice(&other.yaw[start..]);
+        self.is_alive.extend_from_slice(&other.is_alive[start..]);
+        self.team_num.extend_from_slice(&other.team_num[start..]);
+    }
+}
+
+fn track_f32(v: Option<Variant>) -> f32 {
+    match v {
+        Some(Variant::F32(x)) => x,
+        Some(Variant::I32(x)) => x as f32,
+        Some(Variant::U32(x)) => x as f32,
+        _ => f32::NAN,
+    }
+}
+
+fn track_u8(v: Option<Variant>) -> u8 {
+    match v {
+        Some(Variant::Bool(b)) => b as u8,
+        Some(Variant::U32(x)) => x as u8,
+        Some(Variant::I32(x)) => x as u8,
+        _ => u8::MAX,
+    }
+}
+
+
 
 static INTERNALEVENTFIELDS: &'static [&str] = &[
     "userid",
@@ -1198,10 +1273,46 @@ impl<'a> SecondPassParser<'a> {
         Ok(())
     }
 
+    /// Sidecar readout for one cadence tick. Runs after `parse_packet_ents` for this packet, so
+    /// entity state is current for `self.tick`.
+    fn collect_track_sample(&mut self) {
+        let mut rows: Vec<(u64, [f32; 4], u8, u8)> = Vec::with_capacity(self.players.len());
+        for (entity_id, player) in &self.players {
+            let Some(steamid) = player.steamid else { continue };
+            let read = |idx: usize| -> Option<Variant> {
+                self.track_prop_infos
+                    .get(idx)
+                    .and_then(|pi| pi.as_ref())
+                    .and_then(|pi| self.find_prop(pi, entity_id, player).ok())
+            };
+            rows.push((
+                steamid,
+                [track_f32(read(0)), track_f32(read(1)), track_f32(read(2)), track_f32(read(3))],
+                track_u8(read(4)),
+                track_u8(read(5)),
+            ));
+        }
+        let tick = self.tick;
+        let cols = &mut self.track_cols;
+        for (steamid, xyzw, is_alive, team_num) in rows {
+            cols.tick.push(tick);
+            cols.steamid.push(steamid);
+            cols.x.push(xyzw[0]);
+            cols.y.push(xyzw[1]);
+            cols.z.push(xyzw[2]);
+            cols.yaw.push(xyzw[3]);
+            cols.is_alive.push(is_alive);
+            cols.team_num.push(team_num);
+        }
+    }
+
     fn tick_on_cadence(tick: i32, step: u32) -> bool {
         (tick as i64).rem_euclid(step as i64) == 0
     }
 
+    /// Cadence clock for the scoped pass. On `tick % step == 0` either emits a `tick_sample`
+    /// `GameEvent` (with `all_players`) or, when the sidecar is enabled, appends flat rows to
+    /// `track_cols` and emits nothing.
     pub fn create_custom_event_tick_sample(&mut self) -> Result<(), DemoParserError> {
         let Some(step) = self.tick_sample_step else {
             return Ok(());
@@ -1213,6 +1324,11 @@ impl<'a> SecondPassParser<'a> {
             return Ok(());
         }
         if self.last_sampled_tick == Some(self.tick) {
+            return Ok(());
+        }
+        if self.track_sidecar {
+            self.last_sampled_tick = Some(self.tick);
+            self.collect_track_sample();
             return Ok(());
         }
         if !self.wanted_events.contains(&"tick_sample".to_string()) && self.wanted_events.first() != Some(&"all".to_string()) {

@@ -14,6 +14,14 @@ export declare function parseEvents(pathOrBuf: string | Buffer, eventNames?: Arr
 export declare function parseEventsScoped(pathOrBuf: string | Buffer, scopedEvents: Array<ScopedEventSpec>, gameEventListBytes?: Buffer | undefined | null): any
 
 /**
+ * Same single scoped pass as `parseEventsScoped`, but the `tick_sample` cadence is read out
+ * into `tracks` (struct of typed arrays) instead of being emitted as fat event rows. Requires
+ * exactly one `tick_sample` spec with `sampleEveryTicks > 0`; the sidecar props are added to
+ * the parse automatically, so the spec's `playerProps` may be empty.
+ */
+export declare function parseEventsScopedWithTracks(pathOrBuf: string | Buffer, scopedEvents: Array<ScopedEventSpec>, gameEventListBytes?: Buffer | undefined | null): ScopedEventsWithTracks
+
+/**
  * extra: lets you add new fields to grenades. Use list_updated_fields for a full list.
  * grenades: lets you disable non-projectile grenades. This can have a big difference on memory/speed.
  */
@@ -46,11 +54,34 @@ export interface ScopedEventSpec {
   sampleEveryTicks?: number
 }
 
+export interface ScopedEventsWithTracks {
+  /** Same rows `parseEventsScoped` returns, minus `tick_sample`. */
+  events: any
+  /** Cadence readout for the `tick_sample` spec (`X Y Z yaw is_alive team_num` per player). */
+  tracks: TrackSidecar
+}
+
 export interface ScopedEventTickFilter {
   field: string
   op: 'eq' | 'neq' | 'in'
   value?: ScopedEventFilterValue
   values?: Array<ScopedEventFilterValue>
+}
+
+/**
+ * Flat per-sample columns for the `tick_sample` cadence, returned as typed arrays.
+ * Row `i` is one (tick, connected player) pair; rows are grouped by tick in ascending order.
+ * Missing values are `NaN` in the float columns and `255` in `isAlive` / `teamNum`.
+ */
+export interface TrackSidecar {
+  tick: Int32Array
+  steamid: BigUint64Array
+  x: Float32Array
+  y: Float32Array
+  z: Float32Array
+  yaw: Float32Array
+  isAlive: Uint8Array
+  teamNum: Uint8Array
 }
 
 export interface VoiceData {

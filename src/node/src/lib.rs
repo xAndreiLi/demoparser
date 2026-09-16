@@ -15,6 +15,7 @@ use parser::parse_demo::DemoOutput;
 use parser::parse_demo::Parser;
 use parser::first_pass::prop_controller::PropInfo;
 use parser::second_pass::collect_data::PropType;
+use parser::second_pass::game_events::TRACK_SIDECAR_PLAYER_PROPS;
 use parser::second_pass::game_events::{
   GameEvent,
   ScopedEventSpec as CoreScopedEventSpec,
@@ -836,14 +837,81 @@ pub fn parse_events(
   Ok(s)
 }
 
+/// Flat per-sample columns for the `tick_sample` cadence, returned as typed arrays.
+/// Row `i` is one (tick, connected player) pair; rows are grouped by tick in ascending order.
+/// Missing values are `NaN` in the float columns and `255` in `isAlive` / `teamNum`.
+#[napi(object)]
+pub struct TrackSidecar {
+  pub tick: Int32Array,
+  pub steamid: BigUint64Array,
+  pub x: Float32Array,
+  pub y: Float32Array,
+  pub z: Float32Array,
+  pub yaw: Float32Array,
+  pub is_alive: Uint8Array,
+  pub team_num: Uint8Array,
+}
+
+#[napi(object)]
+pub struct ScopedEventsWithTracks {
+  /// Same rows `parseEventsScoped` returns, minus `tick_sample`.
+  pub events: Value,
+  /// Cadence readout for the `tick_sample` spec (`X Y Z yaw is_alive team_num` per player).
+  pub tracks: TrackSidecar,
+}
+
 #[napi]
 pub fn parse_events_scoped(
   path_or_buf: Either<String, Buffer>,
   #[napi(ts_arg_type = "Array<ScopedEventSpec>")] scoped_events: Vec<ParsedScopedEventSpec>,
   game_event_list_bytes: Option<Buffer>,
 ) -> napi::Result<Value> {
+  parse_events_scoped_inner(path_or_buf, scoped_events, game_event_list_bytes, false).map(|(v, _)| v)
+}
+
+/// Same single scoped pass as `parseEventsScoped`, but the `tick_sample` cadence is read out
+/// into `tracks` (struct of typed arrays) instead of being emitted as fat event rows. Requires
+/// exactly one `tick_sample` spec with `sampleEveryTicks > 0`; the sidecar props are added to
+/// the parse automatically, so the spec's `playerProps` may be empty.
+#[napi]
+pub fn parse_events_scoped_with_tracks(
+  path_or_buf: Either<String, Buffer>,
+  #[napi(ts_arg_type = "Array<ScopedEventSpec>")] scoped_events: Vec<ParsedScopedEventSpec>,
+  game_event_list_bytes: Option<Buffer>,
+) -> napi::Result<ScopedEventsWithTracks> {
+  let (events, cols) = parse_events_scoped_inner(path_or_buf, scoped_events, game_event_list_bytes, true)?;
+  let tracks = TrackSidecar {
+    tick: Int32Array::new(cols.tick),
+    steamid: BigUint64Array::new(cols.steamid),
+    x: Float32Array::new(cols.x),
+    y: Float32Array::new(cols.y),
+    z: Float32Array::new(cols.z),
+    yaw: Float32Array::new(cols.yaw),
+    is_alive: Uint8Array::new(cols.is_alive),
+    team_num: Uint8Array::new(cols.team_num),
+  };
+  Ok(ScopedEventsWithTracks { events, tracks })
+}
+
+fn parse_events_scoped_inner(
+  path_or_buf: Either<String, Buffer>,
+  scoped_events: Vec<ParsedScopedEventSpec>,
+  game_event_list_bytes: Option<Buffer>,
+  track_sidecar: bool,
+) -> napi::Result<(Value, parser::second_pass::game_events::TrackColumns)> {
   if scoped_events.is_empty() {
     return Err(Error::new(Status::InvalidArg, "No scoped events provided!"));
+  }
+  if track_sidecar {
+    let cadence_specs: Vec<&ParsedScopedEventSpec> =
+      scoped_events.iter().filter(|spec| spec.event == "tick_sample").collect();
+    let step_ok = cadence_specs.len() == 1 && cadence_specs[0].sample_every_ticks.map_or(false, |step| step > 0);
+    if !step_ok {
+      return Err(Error::new(
+        Status::InvalidArg,
+        "parseEventsScopedWithTracks requires exactly one tick_sample spec with sampleEveryTicks > 0",
+      ));
+    }
   }
 
   let mut event_names = vec![];
@@ -884,6 +952,19 @@ pub fn parse_events_scoped(
     });
   }
 
+  if track_sidecar {
+    // The sidecar reads a fixed pose schema; make sure those props are decoded regardless of
+    // what the tick_sample spec listed.
+    let friendly: Vec<String> = TRACK_SIDECAR_PLAYER_PROPS.iter().map(|s| s.to_string()).collect();
+    let real = match rm_user_friendly_names(&friendly) {
+      Ok(names) => names,
+      Err(e) => return Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
+    };
+    for (real_name, user_friendly_name) in real.iter().zip(&friendly) {
+      real_name_to_og_name.insert(real_name.clone(), user_friendly_name.clone());
+    }
+    wanted_player_props.extend(real);
+  }
   wanted_player_props.sort();
   wanted_player_props.dedup();
   wanted_other_props.sort();
@@ -913,18 +994,34 @@ pub fn parse_events_scoped(
     parse_grenades: false,
   };
 
+  let prof = std::env::var("CS2_PROF").is_ok();
+  let t0 = std::time::Instant::now();
   let mut parser = make_parser(settings, parser::parse_demo::ParsingMode::Normal, file_path)
-    .with_scoped_event_specs(compiled_specs.clone());
+    .with_scoped_event_specs(compiled_specs.clone())
+    .with_track_sidecar(track_sidecar);
   let mut output = parse_demo(bytes, &mut parser)?;
+  let t_parse = t0.elapsed();
   let prop_infos = output.prop_controller.prop_infos.clone();
+  let n_events = output.game_events.len();
+  let t1 = std::time::Instant::now();
   let filtered_events = filter_scoped_events(
     std::mem::take(&mut output.game_events),
     &compiled_specs,
     &prop_infos,
   );
-
-  match serde_json::to_value(&filtered_events) {
-    Ok(s) => Ok(s),
+  let t_filter = t1.elapsed();
+  let t2 = std::time::Instant::now();
+  let value = serde_json::to_value(&filtered_events);
+  let t_json = t2.elapsed();
+  if prof {
+    let n_all_players = filtered_events.iter().filter(|e| e.all_players.is_some()).count();
+    eprintln!(
+      "[prof] parse_events_scoped: parse_demo {:.3}s | filter_scoped_events {:.3}s | serde_json::to_value {:.3}s | rust total {:.3}s | events {} (all_players rows {}) | track rows {}",
+      t_parse.as_secs_f64(), t_filter.as_secs_f64(), t_json.as_secs_f64(), t0.elapsed().as_secs_f64(), n_events, n_all_players, output.track_cols.len()
+    );
+  }
+  match value {
+    Ok(s) => Ok((s, std::mem::take(&mut output.track_cols))),
     Err(e) => Err(Error::new(Status::InvalidArg, format!("{}", e).to_owned())),
   }
 }

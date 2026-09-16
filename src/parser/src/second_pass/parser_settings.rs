@@ -1,3 +1,4 @@
+use crate::first_pass::prop_controller::PropInfo;
 use crate::first_pass::frameparser::StartEndOffset;
 use crate::first_pass::parser::FirstPassOutput;
 use crate::first_pass::prop_controller::PropController;
@@ -81,6 +82,10 @@ pub struct SecondPassParser<'a> {
     pub scoped_event_specs: Arc<Vec<ScopedEventSpec>>,
     pub tick_sample_step: Option<u32>,
     pub last_sampled_tick: Option<i32>,
+    /// When set, `tick_sample` cadence ticks fill `track_cols` instead of emitting events.
+    pub track_sidecar: bool,
+    pub track_cols: crate::second_pass::game_events::TrackColumns,
+    pub track_prop_infos: Vec<Option<PropInfo>>,
 }
 #[derive(Debug, Clone)]
 pub struct Teams {
@@ -161,6 +166,7 @@ impl<'a> SecondPassParser<'a> {
             df_per_player: self.df_per_player,
             entities: self.entities,
             last_tick: self.tick,
+            track_cols: self.track_cols,
         }
     }
     pub fn new(
@@ -169,6 +175,7 @@ impl<'a> SecondPassParser<'a> {
         parse_all_packets: bool,
         start_end_offset: Option<StartEndOffset>,
         scoped_event_specs: Arc<Vec<ScopedEventSpec>>,
+        track_sidecar: bool,
     ) -> Result<Self, DemoParserError> {
         first_pass_output
             .settings
@@ -243,6 +250,13 @@ impl<'a> SecondPassParser<'a> {
             list_props: first_pass_output.list_props,
             tick_sample_step,
             last_sampled_tick: None,
+            track_sidecar,
+            track_cols: Default::default(),
+            track_prop_infos: if track_sidecar {
+                crate::second_pass::game_events::resolve_track_prop_infos(&first_pass_output.prop_controller)
+            } else {
+                vec![]
+            },
         })
     }
 }

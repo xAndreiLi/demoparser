@@ -237,6 +237,11 @@ start from any `DemFullPacket` offset independently.
 
 A `{ event: "tick_sample", sampleEveryTicks: N, playerProps }` spec is a synthetic cadence clock. Core forces `include_all_players` for that name. Emit after `parse_packet_ents` on non-fullpacket packets when `tick.rem_euclid(N) == 0`. Duplicate ticks from MT fullpacket boundaries are dropped in `combine_outputs`.
 
+Two readout shapes exist for the cadence, selected by `Parser::with_track_sidecar(bool)`:
+
+- **Event rows** (default, `parseEventsScoped`): each cadence tick becomes a `tick_sample` `GameEvent` with a nested `all_players` map. Fine for sparse use; at 8 Hz × all players the nested maps + `serde_json::to_value` + NAPI conversion roughly double the call's wall time while decode is unchanged.
+- **Sidecar** (`parseEventsScopedWithTracks`): `SecondPassParser::collect_track_sample` appends one row per (tick, connected player) into `TrackColumns` (`game_events.rs`; fixed schema `TRACK_SIDECAR_PLAYER_PROPS` = `X Y Z yaw is_alive team_num`). No `tick_sample` events are emitted. Segments merge in `combine_outputs` via `TrackColumns::extend_dedup` (ptr order, boundary tick kept once). The binding returns the columns as typed arrays. The binding adds the schema props to `wanted_player_props` itself, so the spec's `playerProps` may be empty. `tick_sample_test.rs` asserts sidecar rows equal the event-path `all_players` values and that ST == MT.
+
 #### `where_clause` vs `tick_filter`
 - `where_clause` is used to decide whether a returned event matches a scoped spec.
 - `tick_filter` is **not** a JS callback; it is a declarative core-side filter evaluated in Rust.
