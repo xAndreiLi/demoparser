@@ -17,10 +17,10 @@ use parser::first_pass::prop_controller::PropInfo;
 use parser::second_pass::collect_data::PropType;
 use parser::second_pass::game_events::{
   GameEvent,
-  ScopedEventSpec,
-  TickFilterClause,
+  ScopedEventSpec as CoreScopedEventSpec,
+  TickFilterClause as CoreTickFilterClause,
   TickFilterOp,
-  TickFilterValue,
+  TickFilterValue as CoreTickFilterValue,
 };
 use parser::second_pass::parser_settings::huffman_lookup_table;
 use parser::second_pass::variants::soa_to_aos;
@@ -35,6 +35,38 @@ use std::result::Result;
 
 #[napi]
 pub type JsVariant = Either4<bool, String, f64, BigInt>;
+
+#[napi(object)]
+pub struct ScopedEventFieldRef {
+  pub field: String,
+}
+
+#[napi]
+pub type ScopedEventFilterValue = Either<JsVariant, ScopedEventFieldRef>;
+
+#[napi(object)]
+pub struct ScopedEventTickFilter {
+  pub field: String,
+  #[napi(ts_type = "'eq' | 'neq' | 'in'")]
+  pub op: String,
+  pub value: Option<ScopedEventFilterValue>,
+  pub values: Option<Vec<ScopedEventFilterValue>>,
+}
+
+#[napi(object)]
+pub struct ScopedEventSpec {
+  pub event: String,
+  #[napi(js_name = "playerProps")]
+  pub player_props: Option<Vec<String>>,
+  #[napi(js_name = "otherProps")]
+  pub other_props: Option<Vec<String>>,
+  #[napi(js_name = "where")]
+  pub where_clause: Option<HashMap<String, JsVariant>>,
+  #[napi(js_name = "includeAllPlayers")]
+  pub include_all_players: Option<bool>,
+  #[napi(js_name = "tickFilter")]
+  pub tick_filter: Option<Either<ScopedEventTickFilter, Vec<ScopedEventTickFilter>>>,
+}
 
 #[napi(object)]
 pub struct WantedPropState {
@@ -131,7 +163,7 @@ pub struct ParsedWantedPropState {
   pub state: ParsedJsVariant,
 }
 
-pub struct ParsedTickFilterValue(pub TickFilterValue);
+pub struct ParsedTickFilterValue(pub CoreTickFilterValue);
 
 impl FromNapiValue for ParsedTickFilterValue {
   unsafe fn from_napi_value(env: sys::napi_env, napi_val: sys::napi_value) -> napi::Result<Self> {
@@ -141,16 +173,16 @@ impl FromNapiValue for ParsedTickFilterValue {
       let obj: Object = Object::from_napi_value(env, napi_val)?;
       if obj.has_named_property("field")? {
         let field: String = obj.get_named_property("field")?;
-        return Ok(ParsedTickFilterValue(TickFilterValue::Field(field)));
+        return Ok(ParsedTickFilterValue(CoreTickFilterValue::Field(field)));
       }
     }
 
     let parsed_variant = ParsedJsVariant::from_napi_value(env, napi_val)?;
-    Ok(ParsedTickFilterValue(TickFilterValue::Value(parsed_variant.0)))
+    Ok(ParsedTickFilterValue(CoreTickFilterValue::Value(parsed_variant.0)))
   }
 }
 
-pub struct ParsedTickFilterClause(pub TickFilterClause);
+pub struct ParsedTickFilterClause(pub CoreTickFilterClause);
 
 impl FromNapiValue for ParsedTickFilterClause {
   unsafe fn from_napi_value(env: sys::napi_env, napi_val: sys::napi_value) -> napi::Result<Self> {
@@ -190,7 +222,7 @@ impl FromNapiValue for ParsedTickFilterClause {
       }
     }
 
-    Ok(ParsedTickFilterClause(TickFilterClause {
+    Ok(ParsedTickFilterClause(CoreTickFilterClause {
       field,
       op,
       value,
@@ -206,7 +238,7 @@ pub struct ParsedScopedEventSpec {
   pub other_props: Vec<String>,
   pub where_clause: HashMap<String, Variant>,
   pub include_all_players: bool,
-  pub tick_filter: Vec<TickFilterClause>,
+  pub tick_filter: Vec<CoreTickFilterClause>,
 }
 
 impl FromNapiValue for ParsedScopedEventSpec {
@@ -261,7 +293,10 @@ impl FromNapiValue for ParsedScopedEventSpec {
   }
 }
 
-fn matching_scoped_specs<'a>(event: &GameEvent, scoped_specs: &'a [ScopedEventSpec]) -> Vec<&'a ScopedEventSpec> {
+fn matching_scoped_specs<'a>(
+  event: &GameEvent,
+  scoped_specs: &'a [CoreScopedEventSpec],
+) -> Vec<&'a CoreScopedEventSpec> {
   scoped_specs
     .iter()
     .filter(|spec| spec.event == event.name && event_matches_where_clause(event, &spec.where_clause))
@@ -280,14 +315,14 @@ fn event_field_value(event: &GameEvent, field_name: &str) -> Option<Variant> {
   }
 }
 
-fn resolve_tick_filter_value(event: &GameEvent, value: &TickFilterValue) -> Option<Variant> {
+fn resolve_tick_filter_value(event: &GameEvent, value: &CoreTickFilterValue) -> Option<Variant> {
   match value {
-    TickFilterValue::Value(value) => Some(value.clone()),
-    TickFilterValue::Field(field_name) => event_field_value(event, field_name),
+    CoreTickFilterValue::Value(value) => Some(value.clone()),
+    CoreTickFilterValue::Field(field_name) => event_field_value(event, field_name),
   }
 }
 
-fn event_matches_tick_filter(event: &GameEvent, tick_filter: &[TickFilterClause]) -> bool {
+fn event_matches_tick_filter(event: &GameEvent, tick_filter: &[CoreTickFilterClause]) -> bool {
   tick_filter.iter().all(|clause| {
     let Some(left) = event_field_value(event, &clause.field) else {
       return false;
@@ -345,7 +380,7 @@ fn make_other_event_field_names(prop_info: &PropInfo) -> Vec<String> {
 }
 
 fn scoped_allowed_field_names(
-  spec: &ScopedEventSpec,
+  spec: &CoreScopedEventSpec,
   prop_infos: &HashMap<String, PropInfo>,
 ) -> HashMap<String, ()> {
   let mut allowed = HashMap::default();
@@ -405,7 +440,7 @@ fn scoped_extra_field_names(prop_infos: &[PropInfo]) -> HashMap<String, ()> {
 
 fn filter_scoped_events(
   game_events: Vec<GameEvent>,
-  scoped_specs: &[ScopedEventSpec],
+  scoped_specs: &[CoreScopedEventSpec],
   prop_infos: &[PropInfo],
 ) -> Vec<GameEvent> {
   let prop_infos_by_name: HashMap<String, PropInfo> = prop_infos
@@ -828,7 +863,7 @@ pub fn parse_events_scoped(
     wanted_player_props.extend(real_player_props.iter().cloned());
     wanted_other_props.extend(real_other_props.iter().cloned());
     event_names.push(scoped_event.event.clone());
-    compiled_specs.push(ScopedEventSpec {
+    compiled_specs.push(CoreScopedEventSpec {
       event: scoped_event.event,
       player_props: real_player_props,
       other_props: real_other_props,

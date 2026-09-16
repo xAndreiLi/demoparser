@@ -3,28 +3,6 @@
 export type JsVariant =
   boolean | string | number | bigint
 
-export interface ScopedEventFieldRef {
-  field: string
-}
-
-export type ScopedEventFilterValue = JsVariant | ScopedEventFieldRef
-
-export interface ScopedEventTickFilter {
-  field: string
-  op: 'eq' | 'neq' | 'in'
-  value?: ScopedEventFilterValue
-  values?: Array<ScopedEventFilterValue>
-}
-
-export interface ScopedEventSpec {
-  event: string
-  playerProps?: Array<string>
-  otherProps?: Array<string>
-  where?: Record<string, JsVariant>
-  includeAllPlayers?: boolean
-  tickFilter?: ScopedEventTickFilter | Array<ScopedEventTickFilter>
-}
-
 export declare function listGameEvents(pathOrBuf: string | Buffer): any
 
 export declare function listUpdatedFields(pathOrBuf: string | Buffer): any
@@ -50,6 +28,29 @@ export declare function parsePlayerSkins(pathOrBuf: string | Buffer): any
 export declare function parseTicks(pathOrBuf: string | Buffer, wantedProps: Array<string>, wantedTicks?: Array<number> | undefined | null, wantedPlayers?: Array<string> | undefined | null, structOfArrays?: boolean | undefined | null, orderBySteamid?: boolean | undefined | null, propStates?: Array<WantedPropState>): any
 
 export declare function parseVoice(pathOrBuf: string | Buffer): Array<VoiceData>
+
+export interface ScopedEventFieldRef {
+  field: string
+}
+
+export type ScopedEventFilterValue =
+  JsVariant | ScopedEventFieldRef
+
+export interface ScopedEventSpec {
+  event: string
+  playerProps?: Array<string>
+  otherProps?: Array<string>
+  where?: Record<string, JsVariant>
+  includeAllPlayers?: boolean
+  tickFilter?: ScopedEventTickFilter | Array<ScopedEventTickFilter>
+}
+
+export interface ScopedEventTickFilter {
+  field: string
+  op: 'eq' | 'neq' | 'in'
+  value?: ScopedEventFilterValue
+  values?: Array<ScopedEventFilterValue>
+}
 
 export interface VoiceData {
   tick: number

@@ -1,10 +1,10 @@
 {
-  "name": "@laihoe/demoparser2",
+  "name": "@bend/demoparser",
   "version": "0.8.1",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
-    "binaryName": "demoparser2",
+    "binaryName": "demoparser",
     "targets": [
       "x86_64-unknown-linux-gnu",
       "x86_64-pc-windows-msvc",
@@ -36,8 +36,8 @@
     "version": "napi version"
   },
   "optionalDependencies": {
-    "@laihoe/demoparser2-win32-x64-msvc": "0.8.1",
-    "@laihoe/demoparser2-darwin-x64": "0.8.1",
-    "@laihoe/demoparser2-linux-x64-gnu": "0.8.1"
+    "@bend/demoparser-win32-x64-msvc": "0.8.1",
+    "@bend/demoparser-darwin-x64": "0.8.1",
+    "@bend/demoparser-linux-x64-gnu": "0.8.1"
   }
 }

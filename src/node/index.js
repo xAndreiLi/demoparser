@@ -70,13 +70,13 @@ function requireNative() {
   } else if (process.platform === 'android') {
     if (process.arch === 'arm64') {
       try {
-        return require('./demoparser2.android-arm64.node')
+        return require('./demoparser.android-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-android-arm64')
-        const bindingPackageVersion = require('@laihoe/demoparser2-android-arm64/package.json').version
+        const binding = require('@bend/demoparser-android-arm64')
+        const bindingPackageVersion = require('@bend/demoparser-android-arm64/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -86,13 +86,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./demoparser2.android-arm-eabi.node')
+        return require('./demoparser.android-arm-eabi.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-android-arm-eabi')
-        const bindingPackageVersion = require('@laihoe/demoparser2-android-arm-eabi/package.json').version
+        const binding = require('@bend/demoparser-android-arm-eabi')
+        const bindingPackageVersion = require('@bend/demoparser-android-arm-eabi/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -107,13 +107,13 @@ function requireNative() {
     if (process.arch === 'x64') {
       if ((process.config && process.config.variables && process.config.variables.shlib_suffix === 'dll.a') || (process.config && process.config.variables && process.config.variables.node_target_type === 'shared_library')) {
         try {
-        return require('./demoparser2.win32-x64-gnu.node')
+        return require('./demoparser.win32-x64-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-win32-x64-gnu')
-        const bindingPackageVersion = require('@laihoe/demoparser2-win32-x64-gnu/package.json').version
+        const binding = require('@bend/demoparser-win32-x64-gnu')
+        const bindingPackageVersion = require('@bend/demoparser-win32-x64-gnu/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -123,13 +123,13 @@ function requireNative() {
       }
       } else {
         try {
-        return require('./demoparser2.win32-x64-msvc.node')
+        return require('./demoparser.win32-x64-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-win32-x64-msvc')
-        const bindingPackageVersion = require('@laihoe/demoparser2-win32-x64-msvc/package.json').version
+        const binding = require('@bend/demoparser-win32-x64-msvc')
+        const bindingPackageVersion = require('@bend/demoparser-win32-x64-msvc/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -140,13 +140,13 @@ function requireNative() {
       }
     } else if (process.arch === 'ia32') {
       try {
-        return require('./demoparser2.win32-ia32-msvc.node')
+        return require('./demoparser.win32-ia32-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-win32-ia32-msvc')
-        const bindingPackageVersion = require('@laihoe/demoparser2-win32-ia32-msvc/package.json').version
+        const binding = require('@bend/demoparser-win32-ia32-msvc')
+        const bindingPackageVersion = require('@bend/demoparser-win32-ia32-msvc/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -156,13 +156,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./demoparser2.win32-arm64-msvc.node')
+        return require('./demoparser.win32-arm64-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-win32-arm64-msvc')
-        const bindingPackageVersion = require('@laihoe/demoparser2-win32-arm64-msvc/package.json').version
+        const binding = require('@bend/demoparser-win32-arm64-msvc')
+        const bindingPackageVersion = require('@bend/demoparser-win32-arm64-msvc/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -175,13 +175,13 @@ function requireNative() {
     }
   } else if (process.platform === 'darwin') {
     try {
-      return require('./demoparser2.darwin-universal.node')
+      return require('./demoparser.darwin-universal.node')
     } catch (e) {
       loadErrors.push(e)
     }
     try {
-      const binding = require('@laihoe/demoparser2-darwin-universal')
-      const bindingPackageVersion = require('@laihoe/demoparser2-darwin-universal/package.json').version
+      const binding = require('@bend/demoparser-darwin-universal')
+      const bindingPackageVersion = require('@bend/demoparser-darwin-universal/package.json').version
       if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
         throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
       }
@@ -191,13 +191,13 @@ function requireNative() {
     }
     if (process.arch === 'x64') {
       try {
-        return require('./demoparser2.darwin-x64.node')
+        return require('./demoparser.darwin-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-darwin-x64')
-        const bindingPackageVersion = require('@laihoe/demoparser2-darwin-x64/package.json').version
+        const binding = require('@bend/demoparser-darwin-x64')
+        const bindingPackageVersion = require('@bend/demoparser-darwin-x64/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -207,13 +207,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./demoparser2.darwin-arm64.node')
+        return require('./demoparser.darwin-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-darwin-arm64')
-        const bindingPackageVersion = require('@laihoe/demoparser2-darwin-arm64/package.json').version
+        const binding = require('@bend/demoparser-darwin-arm64')
+        const bindingPackageVersion = require('@bend/demoparser-darwin-arm64/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -227,13 +227,13 @@ function requireNative() {
   } else if (process.platform === 'freebsd') {
     if (process.arch === 'x64') {
       try {
-        return require('./demoparser2.freebsd-x64.node')
+        return require('./demoparser.freebsd-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-freebsd-x64')
-        const bindingPackageVersion = require('@laihoe/demoparser2-freebsd-x64/package.json').version
+        const binding = require('@bend/demoparser-freebsd-x64')
+        const bindingPackageVersion = require('@bend/demoparser-freebsd-x64/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -243,13 +243,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./demoparser2.freebsd-arm64.node')
+        return require('./demoparser.freebsd-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-freebsd-arm64')
-        const bindingPackageVersion = require('@laihoe/demoparser2-freebsd-arm64/package.json').version
+        const binding = require('@bend/demoparser-freebsd-arm64')
+        const bindingPackageVersion = require('@bend/demoparser-freebsd-arm64/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -264,13 +264,13 @@ function requireNative() {
     if (process.arch === 'x64') {
       if (isMusl()) {
         try {
-          return require('./demoparser2.linux-x64-musl.node')
+          return require('./demoparser.linux-x64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-x64-musl')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-x64-musl/package.json').version
+          const binding = require('@bend/demoparser-linux-x64-musl')
+          const bindingPackageVersion = require('@bend/demoparser-linux-x64-musl/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -280,13 +280,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./demoparser2.linux-x64-gnu.node')
+          return require('./demoparser.linux-x64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-x64-gnu')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-x64-gnu/package.json').version
+          const binding = require('@bend/demoparser-linux-x64-gnu')
+          const bindingPackageVersion = require('@bend/demoparser-linux-x64-gnu/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -298,13 +298,13 @@ function requireNative() {
     } else if (process.arch === 'arm64') {
       if (isMusl()) {
         try {
-          return require('./demoparser2.linux-arm64-musl.node')
+          return require('./demoparser.linux-arm64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-arm64-musl')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-arm64-musl/package.json').version
+          const binding = require('@bend/demoparser-linux-arm64-musl')
+          const bindingPackageVersion = require('@bend/demoparser-linux-arm64-musl/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -314,13 +314,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./demoparser2.linux-arm64-gnu.node')
+          return require('./demoparser.linux-arm64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-arm64-gnu')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-arm64-gnu/package.json').version
+          const binding = require('@bend/demoparser-linux-arm64-gnu')
+          const bindingPackageVersion = require('@bend/demoparser-linux-arm64-gnu/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -332,13 +332,13 @@ function requireNative() {
     } else if (process.arch === 'arm') {
       if (isMusl()) {
         try {
-          return require('./demoparser2.linux-arm-musleabihf.node')
+          return require('./demoparser.linux-arm-musleabihf.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-arm-musleabihf')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-arm-musleabihf/package.json').version
+          const binding = require('@bend/demoparser-linux-arm-musleabihf')
+          const bindingPackageVersion = require('@bend/demoparser-linux-arm-musleabihf/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -348,13 +348,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./demoparser2.linux-arm-gnueabihf.node')
+          return require('./demoparser.linux-arm-gnueabihf.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-arm-gnueabihf')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-arm-gnueabihf/package.json').version
+          const binding = require('@bend/demoparser-linux-arm-gnueabihf')
+          const bindingPackageVersion = require('@bend/demoparser-linux-arm-gnueabihf/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -366,13 +366,13 @@ function requireNative() {
     } else if (process.arch === 'loong64') {
       if (isMusl()) {
         try {
-          return require('./demoparser2.linux-loong64-musl.node')
+          return require('./demoparser.linux-loong64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-loong64-musl')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-loong64-musl/package.json').version
+          const binding = require('@bend/demoparser-linux-loong64-musl')
+          const bindingPackageVersion = require('@bend/demoparser-linux-loong64-musl/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -382,13 +382,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./demoparser2.linux-loong64-gnu.node')
+          return require('./demoparser.linux-loong64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-loong64-gnu')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-loong64-gnu/package.json').version
+          const binding = require('@bend/demoparser-linux-loong64-gnu')
+          const bindingPackageVersion = require('@bend/demoparser-linux-loong64-gnu/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -400,13 +400,13 @@ function requireNative() {
     } else if (process.arch === 'riscv64') {
       if (isMusl()) {
         try {
-          return require('./demoparser2.linux-riscv64-musl.node')
+          return require('./demoparser.linux-riscv64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-riscv64-musl')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-riscv64-musl/package.json').version
+          const binding = require('@bend/demoparser-linux-riscv64-musl')
+          const bindingPackageVersion = require('@bend/demoparser-linux-riscv64-musl/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -416,13 +416,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./demoparser2.linux-riscv64-gnu.node')
+          return require('./demoparser.linux-riscv64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@laihoe/demoparser2-linux-riscv64-gnu')
-          const bindingPackageVersion = require('@laihoe/demoparser2-linux-riscv64-gnu/package.json').version
+          const binding = require('@bend/demoparser-linux-riscv64-gnu')
+          const bindingPackageVersion = require('@bend/demoparser-linux-riscv64-gnu/package.json').version
           if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -433,13 +433,13 @@ function requireNative() {
       }
     } else if (process.arch === 'ppc64') {
       try {
-        return require('./demoparser2.linux-ppc64-gnu.node')
+        return require('./demoparser.linux-ppc64-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-linux-ppc64-gnu')
-        const bindingPackageVersion = require('@laihoe/demoparser2-linux-ppc64-gnu/package.json').version
+        const binding = require('@bend/demoparser-linux-ppc64-gnu')
+        const bindingPackageVersion = require('@bend/demoparser-linux-ppc64-gnu/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -449,13 +449,13 @@ function requireNative() {
       }
     } else if (process.arch === 's390x') {
       try {
-        return require('./demoparser2.linux-s390x-gnu.node')
+        return require('./demoparser.linux-s390x-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-linux-s390x-gnu')
-        const bindingPackageVersion = require('@laihoe/demoparser2-linux-s390x-gnu/package.json').version
+        const binding = require('@bend/demoparser-linux-s390x-gnu')
+        const bindingPackageVersion = require('@bend/demoparser-linux-s390x-gnu/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -469,13 +469,13 @@ function requireNative() {
   } else if (process.platform === 'openharmony') {
     if (process.arch === 'arm64') {
       try {
-        return require('./demoparser2.openharmony-arm64.node')
+        return require('./demoparser.openharmony-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-openharmony-arm64')
-        const bindingPackageVersion = require('@laihoe/demoparser2-openharmony-arm64/package.json').version
+        const binding = require('@bend/demoparser-openharmony-arm64')
+        const bindingPackageVersion = require('@bend/demoparser-openharmony-arm64/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -485,13 +485,13 @@ function requireNative() {
       }
     } else if (process.arch === 'x64') {
       try {
-        return require('./demoparser2.openharmony-x64.node')
+        return require('./demoparser.openharmony-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-openharmony-x64')
-        const bindingPackageVersion = require('@laihoe/demoparser2-openharmony-x64/package.json').version
+        const binding = require('@bend/demoparser-openharmony-x64')
+        const bindingPackageVersion = require('@bend/demoparser-openharmony-x64/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -501,13 +501,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./demoparser2.openharmony-arm.node')
+        return require('./demoparser.openharmony-arm.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@laihoe/demoparser2-openharmony-arm')
-        const bindingPackageVersion = require('@laihoe/demoparser2-openharmony-arm/package.json').version
+        const binding = require('@bend/demoparser-openharmony-arm')
+        const bindingPackageVersion = require('@bend/demoparser-openharmony-arm/package.json').version
         if (bindingPackageVersion !== '0.8.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.8.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -539,7 +539,7 @@ if (!nativeBinding || forceWasi) {
   let wasiBinding = null
   let wasiBindingError = null
   try {
-    wasiBinding = require('./demoparser2.wasi.cjs')
+    wasiBinding = require('./demoparser.wasi.cjs')
     nativeBinding = wasiBinding
   } catch (err) {
     if (forceWasi) {
@@ -548,7 +548,7 @@ if (!nativeBinding || forceWasi) {
   }
   if (!nativeBinding || forceWasi) {
     try {
-      wasiBinding = require('@laihoe/demoparser2-wasm32-wasi')
+      wasiBinding = require('@bend/demoparser-wasm32-wasi')
       nativeBinding = wasiBinding
     } catch (err) {
       if (forceWasi) {

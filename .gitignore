@@ -9,3 +9,5 @@ junk.txt
 voxels.txt
 
 node_modules
+src/node/*.node
+src/node/*.tgz
