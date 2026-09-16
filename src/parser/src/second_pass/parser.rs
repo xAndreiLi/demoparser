@@ -252,6 +252,7 @@ impl<'a> SecondPassParser<'a> {
                             let _ct = prof_on().then(std::time::Instant::now);
                             self.collect_entities();
                             if let Some(t) = _ct { PROF_COLLECT_NS.with(|c| c.set(c.get() + t.elapsed().as_nanos() as u64)); }
+                            self.create_custom_event_tick_sample()?;
                         }
                     }
                     Ok(())

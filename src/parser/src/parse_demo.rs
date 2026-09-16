@@ -109,7 +109,12 @@ impl<'a> Parser<'a> {
         self
     }
 
-    pub fn with_scoped_event_specs(mut self, specs: Vec<ScopedEventSpec>) -> Self {
+    pub fn with_scoped_event_specs(mut self, mut specs: Vec<ScopedEventSpec>) -> Self {
+        for spec in &mut specs {
+            if spec.event == "tick_sample" {
+                spec.include_all_players = true;
+            }
+        }
         self.scoped_event_specs = Arc::new(specs);
         self
     }
@@ -211,6 +216,15 @@ impl<'a> Parser<'a> {
             }
         events.retain(|x|x.name != "player_first_connect");
         events.extend(ids.values().map(|x| x.clone()));
+    }
+    fn dedupe_tick_sample_events(events: &mut Vec<GameEvent>) {
+        let mut seen_ticks = AHashSet::default();
+        events.retain(|event| {
+            if event.name != "tick_sample" {
+                return true;
+            }
+            seen_ticks.insert(event.tick)
+        });
     }
     fn second_pass_single_threaded(&self, outer_bytes: &[u8], first_pass_output: FirstPassOutput) -> Result<DemoOutput, DemoParserError> {
         let prof = std::env::var("CS2_PROF").is_ok();
@@ -441,7 +455,11 @@ impl<'a> Parser<'a> {
                 item_drops: output.item_drops,
                 player_md: output.player_md,
                 roster,
-                game_events: output.game_events,
+                game_events: {
+                    let mut game_events = output.game_events;
+                    Parser::dedupe_tick_sample_events(&mut game_events);
+                    game_events
+                },
                 skins: output.skins,
                 convars: output.convars,
                 df: output.df,
@@ -493,6 +511,8 @@ impl<'a> Parser<'a> {
             projectiles.extend(output.projectiles);
             voice_data.extend(output.voice_data);
         }
+
+        Parser::dedupe_tick_sample_events(&mut game_events);
 
         let all_dfs_combined = self.combine_dfs(dfs, false);
         all_prop_names.sort();

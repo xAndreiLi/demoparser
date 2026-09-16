@@ -1,6 +1,6 @@
 {
   "name": "@bend/demoparser",
-  "version": "0.8.1",
+  "version": "0.10.0",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
@@ -36,8 +36,8 @@
     "version": "napi version"
   },
   "optionalDependencies": {
-    "@bend/demoparser-win32-x64-msvc": "0.8.1",
-    "@bend/demoparser-darwin-x64": "0.8.1",
-    "@bend/demoparser-linux-x64-gnu": "0.8.1"
+    "@bend/demoparser-win32-x64-msvc": "0.10.0",
+    "@bend/demoparser-darwin-x64": "0.10.0",
+    "@bend/demoparser-linux-x64-gnu": "0.10.0"
   }
 }

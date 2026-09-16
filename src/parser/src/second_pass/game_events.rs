@@ -111,6 +111,7 @@ pub struct ScopedEventSpec {
     pub where_clause: AHashMap<String, Variant>,
     pub include_all_players: bool,
     pub tick_filter: Vec<TickFilterClause>,
+    pub sample_every_ticks: Option<u32>,
 }
 
 impl<'a> SecondPassParser<'a> {
@@ -1194,6 +1195,33 @@ impl<'a> SecondPassParser<'a> {
         fields.extend(self.find_non_player_props());
         let ge = GameEvent::new("round_start".to_string(), fields, self.tick);
         self.push_scoped_game_event(ge);
+        Ok(())
+    }
+
+    fn tick_on_cadence(tick: i32, step: u32) -> bool {
+        (tick as i64).rem_euclid(step as i64) == 0
+    }
+
+    pub fn create_custom_event_tick_sample(&mut self) -> Result<(), DemoParserError> {
+        let Some(step) = self.tick_sample_step else {
+            return Ok(());
+        };
+        if self.tick < 0 {
+            return Ok(());
+        }
+        if !Self::tick_on_cadence(self.tick, step) {
+            return Ok(());
+        }
+        if self.last_sampled_tick == Some(self.tick) {
+            return Ok(());
+        }
+        if !self.wanted_events.contains(&"tick_sample".to_string()) && self.wanted_events.first() != Some(&"all".to_string()) {
+            return Ok(());
+        }
+        self.last_sampled_tick = Some(self.tick);
+        self.game_events_counter.insert("tick_sample".to_string());
+        let event = GameEvent::new("tick_sample".to_string(), vec![], self.tick);
+        self.push_scoped_game_event(event);
         Ok(())
     }
 

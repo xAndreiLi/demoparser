@@ -43,6 +43,7 @@ export interface ScopedEventSpec {
   where?: Record<string, JsVariant>
   includeAllPlayers?: boolean
   tickFilter?: ScopedEventTickFilter | Array<ScopedEventTickFilter>
+  sampleEveryTicks?: number
 }
 
 export interface ScopedEventTickFilter {

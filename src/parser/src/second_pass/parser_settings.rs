@@ -79,6 +79,8 @@ pub struct SecondPassParser<'a> {
     pub parse_usercmd: bool,
     pub list_props: bool,
     pub scoped_event_specs: Arc<Vec<ScopedEventSpec>>,
+    pub tick_sample_step: Option<u32>,
+    pub last_sampled_tick: Option<i32>,
 }
 #[derive(Debug, Clone)]
 pub struct Teams {
@@ -175,6 +177,13 @@ impl<'a> SecondPassParser<'a> {
             .extend(vec!["tick".to_owned(), "steamid".to_owned(), "name".to_owned()]);
         let args: Vec<String> = env::args().collect();
         let debug = if args.len() > 2 { args[2] == "true" } else { false };
+        let tick_sample_step = scoped_event_specs.iter().find_map(|spec| {
+            if spec.event == "tick_sample" {
+                spec.sample_every_ticks.filter(|step| *step > 0)
+            } else {
+                None
+            }
+        });
 
         Ok(SecondPassParser {
             uniq_prop_names: AHashSet::default(),
@@ -232,6 +241,8 @@ impl<'a> SecondPassParser<'a> {
             huffman_lookup_table: &first_pass_output.settings.huffman_lookup_table,
             header: HashMap::default(),
             list_props: first_pass_output.list_props,
+            tick_sample_step,
+            last_sampled_tick: None,
         })
     }
 }

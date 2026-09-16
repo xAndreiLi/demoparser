@@ -233,6 +233,9 @@ start from any `DemFullPacket` offset independently.
   - `where_clause`
   - `include_all_players`
   - `tick_filter`
+  - `sample_every_ticks`
+
+A `{ event: "tick_sample", sampleEveryTicks: N, playerProps }` spec is a synthetic cadence clock. Core forces `include_all_players` for that name. Emit after `parse_packet_ents` on non-fullpacket packets when `tick.rem_euclid(N) == 0`. Duplicate ticks from MT fullpacket boundaries are dropped in `combine_outputs`.
 
 #### `where_clause` vs `tick_filter`
 - `where_clause` is used to decide whether a returned event matches a scoped spec.

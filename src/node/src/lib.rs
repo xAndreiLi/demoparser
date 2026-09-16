@@ -66,6 +66,8 @@ pub struct ScopedEventSpec {
   pub include_all_players: Option<bool>,
   #[napi(js_name = "tickFilter")]
   pub tick_filter: Option<Either<ScopedEventTickFilter, Vec<ScopedEventTickFilter>>>,
+  #[napi(js_name = "sampleEveryTicks")]
+  pub sample_every_ticks: Option<u32>,
 }
 
 #[napi(object)]
@@ -239,6 +241,7 @@ pub struct ParsedScopedEventSpec {
   pub where_clause: HashMap<String, Variant>,
   pub include_all_players: bool,
   pub tick_filter: Vec<CoreTickFilterClause>,
+  pub sample_every_ticks: Option<u32>,
 }
 
 impl FromNapiValue for ParsedScopedEventSpec {
@@ -281,6 +284,11 @@ impl FromNapiValue for ParsedScopedEventSpec {
     } else {
       vec![]
     };
+    let sample_every_ticks = if obj.has_named_property("sampleEveryTicks")? {
+      Some(obj.get_named_property("sampleEveryTicks")?)
+    } else {
+      None
+    };
 
     Ok(ParsedScopedEventSpec {
       event,
@@ -289,6 +297,7 @@ impl FromNapiValue for ParsedScopedEventSpec {
       where_clause,
       include_all_players,
       tick_filter,
+      sample_every_ticks,
     })
   }
 }
@@ -863,13 +872,15 @@ pub fn parse_events_scoped(
     wanted_player_props.extend(real_player_props.iter().cloned());
     wanted_other_props.extend(real_other_props.iter().cloned());
     event_names.push(scoped_event.event.clone());
+    let include_all_players = scoped_event.include_all_players || scoped_event.event == "tick_sample";
     compiled_specs.push(CoreScopedEventSpec {
       event: scoped_event.event,
       player_props: real_player_props,
       other_props: real_other_props,
       where_clause: scoped_event.where_clause.into_iter().collect(),
-      include_all_players: scoped_event.include_all_players,
+      include_all_players,
       tick_filter: scoped_event.tick_filter,
+      sample_every_ticks: scoped_event.sample_every_ticks,
     });
   }
 

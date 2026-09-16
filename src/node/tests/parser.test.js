@@ -86,6 +86,42 @@ test('parse_events_scoped_tick_filter_supports_field_to_field_comparison', () =>
     expect(filteredHurts.length).toBeGreaterThan(0);
     expect(filteredHurts.every((event) => !Object.prototype.hasOwnProperty.call(event, 'user_X'))).toBe(true);
 });
+test('parse_events_scoped_tick_sample_emits_all_players_on_cadence', () => {
+    const step = 8;
+    const playerProps = ["X", "Y", "Z", "yaw", "is_alive", "team_num"];
+    const events = parseEventsScoped(scopedFilePath, [
+        { event: "tick_sample", sampleEveryTicks: step, playerProps },
+    ]);
+    const samples = events.filter((event) => event.event_name === "tick_sample");
+    const distinctTicks = new Set(samples.map((event) => event.tick));
+
+    expect(samples.length).toBeGreaterThan(0);
+    expect(distinctTicks.size).toBe(samples.length);
+    expect(samples.every((event) => event.tick >= 0 && event.tick % step === 0)).toBe(true);
+    expect(samples.every((event) => event.all_players && Object.keys(event.all_players).length > 0)).toBe(true);
+    for (const sample of samples) {
+        for (const playerSnapshot of Object.values(sample.all_players)) {
+            for (const playerProp of playerProps) {
+                expect(Object.prototype.hasOwnProperty.call(playerSnapshot, playerProp)).toBe(true);
+            }
+        }
+    }
+});
+test('parse_events_scoped_tick_sample_leaves_other_rows_byte_identical', () => {
+    const baseSpecs = [
+        { event: "player_death", playerProps: ["X"] },
+        { event: "player_hurt", playerProps: ["Y"] },
+    ];
+    const withoutCadence = parseEventsScoped(scopedFilePath, baseSpecs);
+    const withCadence = parseEventsScoped(scopedFilePath, [
+        ...baseSpecs,
+        { event: "tick_sample", sampleEveryTicks: 8, playerProps: ["X", "Y"] },
+    ]);
+    const otherRows = withCadence.filter((event) => event.event_name !== "tick_sample");
+
+    expect(withCadence.some((event) => event.event_name === "tick_sample")).toBe(true);
+    expect(JSON.stringify(otherRows)).toBe(JSON.stringify(withoutCadence));
+});
 test('list_game_events', () => {
     let correct_events = JSON.stringify(JSON.parse(fs.readFileSync("tests/data/list_game_events.json")));
     let events_arr = listGameEvents(filePath);

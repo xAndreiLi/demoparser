@@ -43,6 +43,7 @@ interface ScopedEventSpec {
   where?: Record<string, JsVariant>
   includeAllPlayers?: boolean
   tickFilter?: ScopedEventTickFilter | Array<ScopedEventTickFilter>
+  sampleEveryTicks?: number
 }
 
 function parseEventsScoped(
@@ -267,7 +268,33 @@ High-level behavior:
 - `includeAllPlayers` is more expensive than local event-only enrichment, but still avoids a second parser pass
 - payload size can grow substantially when `all_players` is attached to many events
 
-The CPU win comes from keeping event enrichment and optional all-player snapshots inside one second pass.
+### Cadence `tick_sample`
+
+A `{ event: "tick_sample", sampleEveryTicks: N, playerProps }` spec is a synthetic cadence clock inside the same scoped pass. It is not a second native function.
+
+```ts
+const events = parseEventsScoped(path, [
+  {
+    event: 'tick_sample',
+    sampleEveryTicks: 8,
+    playerProps: ['X', 'Y', 'Z', 'yaw', 'is_alive', 'team_num'],
+  },
+  {
+    event: 'weapon_fire',
+    playerProps: ['X', 'Y'],
+  },
+])
+```
+
+Behavior:
+
+- rows are emitted after entity decode on non-fullpacket packets when `tick.rem_euclid(N) === 0`
+- `includeAllPlayers` is implied; every row has `all_players` keyed by steamid with the requested player props
+- `tick_sample` must be present as a spec so the Node filter keeps the rows
+- adding a cadence spec does not change other event rows
+- alignment is absolute (`tick % N == 0` via Euclidean remainder), not window-relative
+
+The CPU win versus `parseTicks` is that cadence snapshots share the one `parseEventsScoped` second pass.
 
 ## Practical guidance
 
@@ -290,6 +317,11 @@ Use `includeAllPlayers` when:
 - local actor props are not enough
 - you need whole-lobby state at matching event ticks
 - the extra payload size is acceptable
+
+Use `tick_sample` when:
+
+- you need a regular pose clock (for example 8 Hz at `sampleEveryTicks: 8` on a 64-tick demo)
+- you want those snapshots in the same `parseEventsScoped` call as game events
 
 ## Internal note
 
